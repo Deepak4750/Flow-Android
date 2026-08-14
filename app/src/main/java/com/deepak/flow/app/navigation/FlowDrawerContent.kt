@@ -16,15 +16,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.deepak.flow.R
 import com.deepak.flow.app.components.FlowDrawerItem
 import com.deepak.flow.app.components.FlowHairlineDivider
 import com.deepak.flow.app.components.FlowSectionLabel
+import com.deepak.flow.app.components.FlowSupportingText
+import com.deepak.flow.app.theme.FlowSizes
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.app.theme.FlowSurface
 import com.deepak.flow.app.theme.FlowTextPrimary
-import com.deepak.flow.app.theme.FlowTextSecondary
 
 /**
  * Flow's own drawer sheet: a flat near-black panel with hairline separation.
@@ -40,18 +40,18 @@ fun FlowDrawerContent(
 ) {
     Column(
         modifier = modifier
-            .width(300.dp)
+            .width(FlowSizes.drawerWidth)
             .fillMaxHeight()
             .background(FlowSurface)
             .windowInsetsPadding(WindowInsets.systemBars)
-            .padding(horizontal = FlowSpacing.lg),
+            .padding(horizontal = FlowSpacing.screenHorizontal),
     ) {
         Spacer(modifier = Modifier.height(FlowSpacing.xl))
         FlowSectionLabel("Flow")
         Spacer(modifier = Modifier.height(FlowSpacing.xs))
         Text(
             text = userName ?: "Your reminders",
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineMedium,
             color = FlowTextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -71,10 +71,6 @@ fun FlowDrawerContent(
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
         FlowHairlineDivider()
         Spacer(modifier = Modifier.height(FlowSpacing.md))
-        Text(
-            text = stringResource(R.string.about_privacy),
-            style = MaterialTheme.typography.bodyMedium,
-            color = FlowTextSecondary,
-        )
+        FlowSupportingText(stringResource(R.string.about_privacy))
     }
 }

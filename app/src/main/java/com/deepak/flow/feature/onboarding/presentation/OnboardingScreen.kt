@@ -10,26 +10,24 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepak.flow.R
 import com.deepak.flow.app.components.FlowButton
+import com.deepak.flow.app.components.FlowFieldHeading
+import com.deepak.flow.app.components.FlowScreenTitle
+import com.deepak.flow.app.components.FlowScreenTopBar
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.theme.FlowSpacing
-import com.deepak.flow.app.theme.FlowTextPrimary
-import com.deepak.flow.app.theme.FlowTextSecondary
 
 @Composable
 fun OnboardingScreen(
     viewModel: OnboardingViewModel,
-    onComplete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -46,17 +44,15 @@ fun OnboardingScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = FlowSpacing.screenHorizontal),
         ) {
-            Spacer(modifier = Modifier.height(72.dp))
+            // No navigation control here, but the bar still reserves its row so
+            // the label starts at the same height as it does on every screen.
+            FlowScreenTopBar()
             FlowSectionLabel(stringResource(R.string.app_name))
-            Spacer(modifier = Modifier.height(FlowSpacing.sm))
-            Text(
-                text = "Let's make this personal.",
-                style = MaterialTheme.typography.headlineLarge,
-                color = FlowTextPrimary,
-            )
+            Spacer(modifier = Modifier.height(FlowSpacing.xs))
+            FlowScreenTitle("Let's make this personal.")
             Spacer(modifier = Modifier.height(FlowSpacing.xl))
 
-            FieldHeading(
+            FlowFieldHeading(
                 label = stringResource(R.string.settings_label_name),
                 supporting = "What should we call you?",
             )
@@ -67,7 +63,7 @@ fun OnboardingScreen(
             )
 
             Spacer(modifier = Modifier.height(FlowSpacing.lg))
-            FieldHeading(
+            FlowFieldHeading(
                 label = stringResource(R.string.settings_label_nickname),
                 supporting = "Optional — what Flow calls you in greetings",
             )
@@ -80,27 +76,15 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(FlowSpacing.xxl))
             FlowButton(
                 text = "Continue",
-                onClick = { viewModel.completeOnboarding(onComplete) },
+                onClick = { viewModel.completeOnboarding() },
                 enabled = !uiState.isSaving,
             )
             Spacer(modifier = Modifier.height(FlowSpacing.xs))
             FlowTextAction(
                 text = "Skip for now",
-                onClick = { viewModel.skipOnboarding(onComplete) },
+                onClick = { viewModel.skipOnboarding() },
             )
             Spacer(modifier = Modifier.height(FlowSpacing.xl))
         }
     }
-}
-
-@Composable
-private fun FieldHeading(label: String, supporting: String) {
-    FlowSectionLabel(label)
-    Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-    Text(
-        text = supporting,
-        style = MaterialTheme.typography.bodyMedium,
-        color = FlowTextSecondary,
-    )
-    Spacer(modifier = Modifier.height(FlowSpacing.xs))
 }

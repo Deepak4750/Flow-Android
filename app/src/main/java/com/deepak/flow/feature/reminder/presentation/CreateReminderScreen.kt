@@ -22,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,16 +37,17 @@ import com.deepak.flow.R
 import com.deepak.flow.app.components.AnimatedReveal
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowChip
+import com.deepak.flow.app.components.FlowFieldHeading
 import com.deepak.flow.app.components.FlowHairlineDivider
 import com.deepak.flow.app.components.FlowOptionSheet
 import com.deepak.flow.app.components.FlowScreenHeader
+import com.deepak.flow.app.components.FlowSectionBreak
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSelectorRow
-import com.deepak.flow.app.components.FlowSwitch
 import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
+import com.deepak.flow.app.components.FlowToggleRow
 import com.deepak.flow.app.theme.FlowSpacing
-import com.deepak.flow.app.theme.FlowTextSecondary
 import com.deepak.flow.core.model.Category
 import java.time.LocalDate
 import java.time.LocalTime
@@ -121,9 +121,9 @@ fun CreateReminderScreen(
                 title = if (uiState.isEditMode) "Edit reminder" else "New reminder",
                 onBack = onBack,
             )
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            Spacer(modifier = Modifier.height(FlowSpacing.xl))
 
-            FieldHeading(
+            FlowFieldHeading(
                 label = "Task",
                 supporting = "What do you want to remember?",
             )
@@ -161,7 +161,7 @@ fun CreateReminderScreen(
                 }
             }
 
-            SectionBreak()
+            FlowSectionBreak()
             FlowSectionLabel("When")
             Spacer(modifier = Modifier.height(FlowSpacing.sm))
             ScheduleControlsSection(
@@ -206,8 +206,8 @@ fun CreateReminderScreen(
                 dateFormatter = dateFormatter,
             )
 
-            SectionBreak()
-            FieldHeading(
+            FlowSectionBreak()
+            FlowFieldHeading(
                 label = "Note",
                 supporting = "Shown on the notification",
             )
@@ -261,11 +261,11 @@ private fun AdvancedSection(
 ) {
     val context = LocalContext.current
     Column {
-        SectionBreak()
+        FlowSectionBreak()
 
         // Interval schedules set their own anchor date in the When section above.
         if (!uiState.isIntervalSchedule) {
-            FieldHeading(
+            FlowFieldHeading(
                 label = "Start date",
                 supporting = "When this reminder becomes active",
             )
@@ -283,7 +283,7 @@ private fun AdvancedSection(
             Spacer(modifier = Modifier.height(FlowSpacing.lg))
         }
 
-        ToggleRow(
+        FlowToggleRow(
             label = "End date",
             supporting = "Stop repeating after a day",
             checked = uiState.endDateEnabled,
@@ -306,8 +306,8 @@ private fun AdvancedSection(
             }
         }
 
-        SectionBreak()
-        FieldHeading(
+        FlowSectionBreak()
+        FlowFieldHeading(
             label = "Why",
             supporting = "Optional — what matters about this for you?",
         )
@@ -320,7 +320,7 @@ private fun AdvancedSection(
         )
 
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
-        ToggleRow(
+        FlowToggleRow(
             label = "Active hours",
             supporting = "Only remind me while I'm awake",
             checked = uiState.activeHoursEnabled,
@@ -357,50 +357,6 @@ private fun AdvancedSection(
             }
         }
     }
-}
-
-@Composable
-private fun FieldHeading(label: String, supporting: String) {
-    FlowSectionLabel(label)
-    Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-    Text(
-        text = supporting,
-        style = MaterialTheme.typography.bodyMedium,
-        color = FlowTextSecondary,
-    )
-    Spacer(modifier = Modifier.height(FlowSpacing.xs))
-}
-
-@Composable
-private fun ToggleRow(
-    label: String,
-    supporting: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.padding(end = FlowSpacing.md)) {
-            FlowSectionLabel(label)
-            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-            Text(
-                text = supporting,
-                style = MaterialTheme.typography.bodyMedium,
-                color = FlowTextSecondary,
-            )
-        }
-        FlowSwitch(checked = checked, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-private fun SectionBreak() {
-    Spacer(modifier = Modifier.height(FlowSpacing.xl))
-    FlowHairlineDivider()
-    Spacer(modifier = Modifier.height(FlowSpacing.lg))
 }
 
 internal fun flowTimeFormatter(uses24Hour: Boolean): DateTimeFormatter =

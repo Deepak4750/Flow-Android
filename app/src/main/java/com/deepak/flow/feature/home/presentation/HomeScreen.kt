@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,12 +36,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepak.flow.R
 import com.deepak.flow.app.components.FlowButton
@@ -53,6 +50,8 @@ import com.deepak.flow.app.components.FlowHairlineDivider
 import com.deepak.flow.app.components.FlowIconAction
 import com.deepak.flow.app.components.FlowListRow
 import com.deepak.flow.app.components.FlowMetaText
+import com.deepak.flow.app.components.FlowScreenTitle
+import com.deepak.flow.app.components.FlowScreenTopBar
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSwitch
 import com.deepak.flow.app.navigation.FlowDrawerContent
@@ -60,8 +59,10 @@ import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.theme.FlowAccent
 import com.deepak.flow.app.theme.FlowSizes
 import com.deepak.flow.app.theme.FlowSpacing
+import com.deepak.flow.app.theme.FlowTextDisabled
 import com.deepak.flow.app.theme.FlowTextPrimary
 import com.deepak.flow.app.theme.FlowTextSecondary
+import com.deepak.flow.app.theme.FlowTextTertiary
 import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.model.Schedule
 import com.deepak.flow.core.model.categoryLabel
@@ -163,36 +164,31 @@ private fun HomeContent(
                 .padding(padding)
                 .padding(horizontal = FlowSpacing.screenHorizontal),
         ) {
-            Spacer(modifier = Modifier.height(FlowSpacing.md))
-            // Offset so the glyph optically aligns with the content's left edge
-            // rather than the icon button's 48dp touch target.
-            FlowIconAction(
-                icon = Icons.Default.Menu,
-                contentDescription = stringResource(R.string.content_description_open_menu),
-                onClick = onOpenDrawer,
-                modifier = Modifier.offset(x = -FlowSpacing.sm),
+            FlowScreenTopBar(
+                leading = {
+                    FlowIconAction(
+                        icon = Icons.Default.Menu,
+                        contentDescription = stringResource(R.string.content_description_open_menu),
+                        onClick = onOpenDrawer,
+                    )
+                },
             )
-            Spacer(modifier = Modifier.height(FlowSpacing.md))
             FlowSectionLabel("Flow")
             Spacer(modifier = Modifier.height(FlowSpacing.xs))
-            Text(
-                text = uiState.greeting,
-                style = MaterialTheme.typography.headlineLarge,
-                color = FlowTextPrimary,
-            )
+            FlowScreenTitle(uiState.greeting)
             uiState.userLabel?.let { label ->
                 Spacer(modifier = Modifier.height(FlowSpacing.xxs))
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = FlowTextSecondary,
                 )
             }
 
+            Spacer(modifier = Modifier.height(FlowSpacing.xl))
             val next = uiState.nextReminder
             val nextInstant = uiState.nextReminderInstant
             if (next != null && nextInstant != null) {
-                Spacer(modifier = Modifier.height(FlowSpacing.xl))
                 NextUpSection(
                     reminder = next,
                     instant = nextInstant,
@@ -200,9 +196,9 @@ private fun HomeContent(
                     zoneId = zoneId,
                     onClick = { onEditReminder(next.id) },
                 )
+                Spacer(modifier = Modifier.height(FlowSpacing.lg))
             }
 
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
             FlowSectionLabel(if (uiState.reminders.isEmpty()) "Reminders" else "All reminders")
             Spacer(modifier = Modifier.height(FlowSpacing.sm))
             FlowHairlineDivider()
@@ -247,16 +243,7 @@ private fun NextUpSection(
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(6.dp)
-                    .clip(CircleShape)
-                    .background(FlowAccent),
-            )
-            Spacer(modifier = Modifier.width(FlowSpacing.xs))
-            FlowMetaText("Next up")
-        }
+        NextUpMarker()
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
         Text(
             text = reminder.title,
@@ -276,22 +263,36 @@ private fun NextUpSection(
     }
 }
 
+/**
+ * What happens next, marked the same way wherever it appears: the accent dot and
+ * the same words, whether at the top of the screen or against a row in the list.
+ */
+@Composable
+private fun NextUpMarker() {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(FlowSizes.accentDot)
+                .clip(CircleShape)
+                .background(FlowAccent),
+        )
+        Spacer(modifier = Modifier.width(FlowSpacing.xs))
+        FlowMetaText("Next up")
+    }
+}
+
 @Composable
 private fun EmptyState(
     onCreateReminder: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Centred vertically in the space the list would fill, but still on the
+    // screen's left edge like every other block of content.
     Box(
         modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center,
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(
-                horizontal = FlowSpacing.lg,
-                vertical = FlowSpacing.xxl,
-            ),
-        ) {
+        Column(modifier = Modifier.padding(vertical = FlowSpacing.xxl)) {
             Text(
                 text = "Nothing scheduled yet.",
                 style = MaterialTheme.typography.titleLarge,
@@ -326,7 +327,7 @@ private fun ReminderList(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(bottom = 96.dp),
+        contentPadding = PaddingValues(bottom = FlowSizes.fabClearance),
     ) {
         items(reminders, key = { it.id }) { reminder ->
             ReminderRow(
@@ -351,44 +352,49 @@ private fun ReminderRow(
     onDelete: () -> Unit,
     onClick: () -> Unit,
 ) {
+    // A disabled reminder steps down the text ramp rather than fading out, so it
+    // reads as switched off while staying above the contrast floor.
+    val titleColor = if (reminder.enabled) FlowTextPrimary else FlowTextDisabled
+    val supportingColor = if (reminder.enabled) FlowTextSecondary else FlowTextDisabled
+    val metaColor = if (reminder.enabled) FlowTextTertiary else FlowTextDisabled
+
     FlowListRow(modifier = Modifier.clickable(onClick = onClick)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
         ) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .alpha(if (reminder.enabled) 1f else 0.45f),
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = reminder.title,
                     style = MaterialTheme.typography.titleLarge,
-                    color = FlowTextPrimary,
+                    color = titleColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-                FlowMetaText("${reminder.categoryLabel()} · ${scheduleSummary(reminder)}")
+                FlowMetaText(
+                    text = "${reminder.categoryLabel()} · ${scheduleSummary(reminder)}",
+                    color = metaColor,
+                )
                 Spacer(modifier = Modifier.height(FlowSpacing.xs))
                 Text(
                     text = reminderTimeLabel(reminder, timeFormatter),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = FlowTextSecondary,
+                    color = supportingColor,
                 )
                 reminder.note?.takeIf { it.isNotBlank() }?.let { note ->
                     Spacer(modifier = Modifier.height(FlowSpacing.xxs))
                     Text(
                         text = note,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = FlowTextSecondary,
+                        color = supportingColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
                 if (isNext && reminder.enabled) {
                     Spacer(modifier = Modifier.height(FlowSpacing.xs))
-                    FlowMetaText("Next", color = FlowAccent)
+                    NextUpMarker()
                 }
             }
             Column(horizontalAlignment = Alignment.End) {

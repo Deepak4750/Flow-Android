@@ -28,11 +28,17 @@ class FlowApplication : Application() {
         super.onCreate()
         NotificationChannelManager.createChannel(this)
 
+        // No blanket destructive fallback: reminders are user data now, so a future schema
+        // bump must ship a real Migration rather than silently dropping the tables. Only
+        // versions 1 and 2 stay destructive — they existed solely during initial
+        // development, were never released, and their schemas were never exported, so no
+        // migration could be written for them; this keeps a stale dev database recoverable
+        // instead of crashing on open.
         database = Room.databaseBuilder(
             applicationContext,
             FlowDatabase::class.java,
             "flow_database",
-        ).fallbackToDestructiveMigration(dropAllTables = true)
+        ).fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2)
             .build()
 
         notificationScheduler = NotificationScheduler(this)

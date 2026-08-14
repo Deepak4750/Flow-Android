@@ -11,6 +11,35 @@ import androidx.compose.ui.unit.sp
 private val FlowSans = FontFamily.SansSerif
 private val FlowMono = FontFamily.Monospace
 
+/*
+ * Role to style mapping. A role means the same thing on every screen, so it must
+ * look the same on every screen. Pick by role, never by eye.
+ *
+ *   Screen hero (greeting, tagline, opening statement)
+ *       headlineLarge / FlowTextPrimary        — via FlowScreenTitle
+ *   Prominent item (the next-up reminder, the drawer identity)
+ *       headlineMedium / FlowTextPrimary
+ *   List item title, text field input, dialog title
+ *       titleLarge / FlowTextPrimary
+ *   Drawer navigation item
+ *       titleMedium / FlowTextPrimary when selected, FlowTextSecondary otherwise
+ *   Screen header title, section label, field label
+ *       labelLarge mono uppercase / FlowTextTertiary
+ *   Button and text-action label
+ *       labelLarge mono uppercase / foreground of the control
+ *   Inline metadata, chip label
+ *       labelMedium mono uppercase / FlowTextTertiary
+ *   Chosen value (selector row, info row, option row, stepper unit)
+ *       bodyLarge / FlowTextPrimary, FlowTextSecondary when not chosen
+ *   Supporting prose, helper text, list metadata line
+ *       bodyMedium / FlowTextSecondary
+ *   Placeholder, disabled content
+ *       host style / FlowTextDisabled
+ *
+ * The colour is part of the role. FlowAccent is not in this table: it marks what
+ * happens next and the selected option in a sheet, and appears nowhere else.
+ */
+
 val FlowTypography = Typography(
     displayLarge = TextStyle(
         fontFamily = FlowSans,

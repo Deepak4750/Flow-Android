@@ -30,7 +30,9 @@ class OnboardingViewModel(
     fun updateDisplayName(value: String) = _uiState.update { it.copy(displayName = value) }
     fun updateNickname(value: String) = _uiState.update { it.copy(nickname = value) }
 
-    fun completeOnboarding(onComplete: () -> Unit) {
+    // Both paths persist the profile and stop there: FlowApp observes
+    // isOnboardingComplete() and swaps the UI itself, so there is nothing to call back to.
+    fun completeOnboarding() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
             val state = _uiState.value
@@ -39,14 +41,12 @@ class OnboardingViewModel(
                 nickname = state.nickname,
             )
             _uiState.update { it.copy(isSaving = false) }
-            onComplete()
         }
     }
 
-    fun skipOnboarding(onComplete: () -> Unit) {
+    fun skipOnboarding() {
         viewModelScope.launch {
             profileRepository.completeOnboarding(displayName = null, nickname = null)
-            onComplete()
         }
     }
 }

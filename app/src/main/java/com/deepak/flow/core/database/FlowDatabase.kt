@@ -7,7 +7,7 @@ import androidx.room.TypeConverters
 @Database(
     entities = [ReminderEntity::class, UserProfileEntity::class],
     version = 3,
-    exportSchema = false,
+    exportSchema = true,
 )
 @TypeConverters(DatabaseConverters::class)
 abstract class FlowDatabase : RoomDatabase() {

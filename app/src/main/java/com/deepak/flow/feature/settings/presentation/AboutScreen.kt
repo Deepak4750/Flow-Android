@@ -15,13 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.deepak.flow.BuildConfig
 import com.deepak.flow.R
-import com.deepak.flow.app.components.FlowHairlineDivider
 import com.deepak.flow.app.components.FlowInfoRow
 import com.deepak.flow.app.components.FlowScreenHeader
+import com.deepak.flow.app.components.FlowScreenTitle
+import com.deepak.flow.app.components.FlowSectionBreak
 import com.deepak.flow.app.components.FlowSectionLabel
+import com.deepak.flow.app.components.FlowSupportingText
 import com.deepak.flow.app.theme.FlowSpacing
-import com.deepak.flow.app.theme.FlowTextPrimary
-import com.deepak.flow.app.theme.FlowTextSecondary
 
 @Composable
 fun AboutScreen(
@@ -46,30 +46,19 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(FlowSpacing.xl))
 
             FlowSectionLabel(stringResource(R.string.app_name))
-            Spacer(modifier = Modifier.height(FlowSpacing.sm))
-            Text(
-                text = stringResource(R.string.about_tagline),
-                style = MaterialTheme.typography.headlineMedium,
-                color = FlowTextPrimary,
-            )
-            Spacer(modifier = Modifier.height(FlowSpacing.xl))
-            FlowHairlineDivider()
-            Spacer(modifier = Modifier.height(FlowSpacing.md))
+            Spacer(modifier = Modifier.height(FlowSpacing.xs))
+            FlowScreenTitle(stringResource(R.string.about_tagline))
 
+            FlowSectionBreak()
             FlowInfoRow(
                 label = stringResource(R.string.about_label_version),
                 value = BuildConfig.VERSION_NAME,
             )
-            FlowHairlineDivider()
 
-            Spacer(modifier = Modifier.height(FlowSpacing.xl))
+            FlowSectionBreak()
             FlowSectionLabel(stringResource(R.string.about_label_privacy))
-            Spacer(modifier = Modifier.height(FlowSpacing.xs))
-            Text(
-                text = stringResource(R.string.about_privacy_detail),
-                style = MaterialTheme.typography.bodyLarge,
-                color = FlowTextSecondary,
-            )
+            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+            FlowSupportingText(stringResource(R.string.about_privacy_detail))
             Spacer(modifier = Modifier.height(FlowSpacing.xxl))
         }
     }

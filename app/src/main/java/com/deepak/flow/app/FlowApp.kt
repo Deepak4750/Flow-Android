@@ -37,7 +37,6 @@ fun FlowApp(modifier: Modifier = Modifier) {
             val viewModel: OnboardingViewModel = viewModel(factory = factory)
             OnboardingScreen(
                 viewModel = viewModel,
-                onComplete = { },
                 modifier = modifier,
             )
         } else {

@@ -69,7 +69,10 @@ class ReminderRepositoryImpl(
     }
 
     override suspend fun rescheduleAllEnabledReminders() {
-        notificationScheduler.cancelAll()
+        // Cancel every known alarm before rebuilding, so calling this on an already
+        // scheduled process (a timezone change, say) cannot leave a stale alarm behind
+        // for a reminder that is now disabled or past its end date.
+        dao.getAllIds().forEach { notificationScheduler.cancelReminder(it) }
         dao.getEnabled().forEach { entity ->
             notificationScheduler.scheduleNextOccurrence(entity.toDomain(json))
         }

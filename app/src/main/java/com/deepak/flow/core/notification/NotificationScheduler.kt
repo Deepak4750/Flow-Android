@@ -4,6 +4,7 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.notification.receiver.AlarmReceiver
 import com.deepak.flow.core.scheduling.SchedulingEngine
@@ -38,11 +39,7 @@ class NotificationScheduler(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        alarmManager.setAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            next.toEpochMilli(),
-            pendingIntent,
-        )
+        scheduleExactOrFallback(next.toEpochMilli(), pendingIntent)
     }
 
     fun cancelReminder(reminderId: Long) {
@@ -57,10 +54,6 @@ class NotificationScheduler(
         pendingIntent.cancel()
     }
 
-    fun cancelAll() {
-        // Individual cancellation happens per reminder; no global alarm list stored.
-    }
-
     fun calculateNextOccurrenceForReminder(reminder: Reminder, referenceInstant: Instant): Instant? {
         return schedulingEngine.calculateNextOccurrence(
             reminder = reminder,
@@ -68,4 +61,36 @@ class NotificationScheduler(
             zoneId = zoneId,
         )
     }
+
+    // A reminder is only useful if it arrives when it said it would, so exact alarms are
+    // the default. Both the pre-check and the catch are needed: on API 31+ the exact APIs
+    // throw SecurityException without the permission, and SCHEDULE_EXACT_ALARM can be
+    // revoked while this process is alive, so a check that passed earlier is no guarantee.
+    // An inexact alarm still fires, so falling back always beats dropping the reminder.
+    private fun scheduleExactOrFallback(triggerAtMillis: Long, pendingIntent: PendingIntent) {
+        if (canScheduleExactAlarms()) {
+            try {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    pendingIntent,
+                )
+                return
+            } catch (_: SecurityException) {
+                // Permission revoked between the check and the call.
+            }
+        }
+
+        alarmManager.setAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            triggerAtMillis,
+            pendingIntent,
+        )
+    }
+
+    // Below API 31 exact alarms need no permission at all. From 31 the manifest's
+    // SCHEDULE_EXACT_ALARM is user-revocable, and from 33 USE_EXACT_ALARM makes
+    // canScheduleExactAlarms() report true unconditionally.
+    private fun canScheduleExactAlarms(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
 }

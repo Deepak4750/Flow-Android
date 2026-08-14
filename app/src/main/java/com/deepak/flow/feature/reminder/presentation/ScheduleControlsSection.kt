@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.deepak.flow.app.components.AnimatedReveal
@@ -19,8 +17,8 @@ import com.deepak.flow.app.components.FlowHairlineDivider
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSelectorRow
 import com.deepak.flow.app.components.FlowStepper
+import com.deepak.flow.app.components.FlowSupportingText
 import com.deepak.flow.app.theme.FlowSpacing
-import com.deepak.flow.app.theme.FlowTextSecondary
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
@@ -221,10 +219,8 @@ private fun IntervalStartControls(
             )
         }
     }
-    Text(
+    FlowSupportingText(
         text = helperText,
-        style = MaterialTheme.typography.bodyMedium,
-        color = FlowTextSecondary,
         modifier = Modifier.padding(top = FlowSpacing.sm),
     )
 }

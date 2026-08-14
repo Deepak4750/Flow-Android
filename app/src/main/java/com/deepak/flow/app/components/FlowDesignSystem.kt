@@ -62,6 +62,7 @@ import com.deepak.flow.app.theme.FlowAccent
 import com.deepak.flow.app.theme.FlowBlack
 import com.deepak.flow.app.theme.FlowBorder
 import com.deepak.flow.app.theme.FlowBorderStrong
+import com.deepak.flow.app.theme.FlowError
 import com.deepak.flow.app.theme.FlowMotion
 import com.deepak.flow.app.theme.FlowPressed
 import com.deepak.flow.app.theme.FlowSizes
@@ -92,6 +93,75 @@ fun FlowSectionLabel(
         color = FlowTextTertiary,
         modifier = modifier,
     )
+}
+
+/**
+ * The opening statement of a screen: the greeting on Home, the tagline on About.
+ * One style, one colour, real heading semantics — so every screen announces and
+ * reads the same way.
+ */
+@Composable
+fun FlowScreenTitle(
+    text: String,
+    modifier: Modifier = Modifier,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.headlineLarge,
+        color = FlowTextPrimary,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.semantics { heading() },
+    )
+}
+
+/**
+ * Everything that explains rather than states: the line under a heading, a
+ * helper sentence, the metadata line on a list row. One style, one colour.
+ */
+@Composable
+fun FlowSupportingText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = FlowTextSecondary,
+    maxLines: Int = Int.MAX_VALUE,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = color,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Supporting prose under a label, followed by the control it introduces.
+ * Shared by every form screen so the label, the explanation and the gap beneath
+ * them are identical throughout the app.
+ */
+@Composable
+fun FlowFieldHeading(
+    label: String,
+    supporting: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        FlowSectionLabel(label)
+        Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+        FlowSupportingText(supporting)
+        Spacer(modifier = Modifier.height(FlowSpacing.md))
+    }
+}
+
+/** The one way Flow separates two sections of a screen. */
+@Composable
+fun FlowSectionBreak() {
+    Spacer(modifier = Modifier.height(FlowSpacing.xl))
+    FlowHairlineDivider()
+    Spacer(modifier = Modifier.height(FlowSpacing.lg))
 }
 
 /**
@@ -251,7 +321,7 @@ fun FlowTextAction(
     val haptic = LocalHapticFeedback.current
     val color = when {
         !enabled -> FlowTextDisabled
-        destructive -> MaterialTheme.colorScheme.error
+        destructive -> FlowError
         else -> FlowTextPrimary
     }
     Box(
@@ -458,31 +528,42 @@ fun FlowChip(
         label = "chipBorder",
     )
 
+    // The tappable area is the full touch target; the drawn chip stays compact
+    // inside it, so a row of chips is reachable without becoming bulky.
     Box(
         modifier = modifier
-            .defaultMinSize(minHeight = 36.dp)
-            .clip(MaterialTheme.shapes.small)
-            .border(FlowSizes.hairline, border, MaterialTheme.shapes.small)
-            .background(background)
+            .defaultMinSize(minHeight = FlowSizes.touchTarget)
             .clickable(
                 role = Role.RadioButton,
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onClick()
                 },
-            )
-            .padding(horizontal = FlowSpacing.sm, vertical = FlowSpacing.xs),
+            ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelMedium,
-            color = foreground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Box(
+            modifier = Modifier
+                .defaultMinSize(minHeight = FlowSizes.chipHeight)
+                .clip(MaterialTheme.shapes.small)
+                .border(FlowSizes.hairline, border, MaterialTheme.shapes.small)
+                .background(background)
+                .padding(horizontal = FlowSpacing.sm, vertical = FlowSpacing.xs),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = foreground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
+
+/** Wide enough for two digits at headline size; local to the stepper only. */
+private val StepperValueWidth = 56.dp
 
 @Composable
 fun FlowStepper(
@@ -515,7 +596,7 @@ fun FlowStepper(
                 value = value.toString(),
                 onValueChange = onValueChange,
                 modifier = Modifier
-                    .width(56.dp)
+                    .width(StepperValueWidth)
                     .defaultMinSize(minHeight = FlowSizes.touchTarget),
                 textStyle = MaterialTheme.typography.headlineMedium.copy(color = FlowTextPrimary),
                 singleLine = true,
@@ -539,6 +620,45 @@ fun FlowStepper(
     }
 }
 
+/**
+ * The navigation row every screen opens with. The row occupies a full touch
+ * target whether or not it holds a control, so the first line of content sits at
+ * the same height on every screen. Leading and trailing actions are shifted by
+ * the optical inset, which puts the glyph on the screen's left or right edge
+ * instead of the invisible 48dp box around it.
+ */
+@Composable
+fun FlowScreenTopBar(
+    modifier: Modifier = Modifier,
+    leading: @Composable (() -> Unit)? = null,
+    trailing: @Composable (() -> Unit)? = null,
+) {
+    Spacer(modifier = Modifier.height(FlowSpacing.screenTop))
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(FlowSizes.touchTarget),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (leading != null) {
+            Box(modifier = Modifier.offset(x = -FlowSizes.iconActionOpticalInset)) {
+                leading()
+            }
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        if (trailing != null) {
+            Box(modifier = Modifier.offset(x = FlowSizes.iconActionOpticalInset)) {
+                trailing()
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(FlowSpacing.screenTop))
+}
+
+/**
+ * Back navigation plus the screen's name. The title sits on the screen's left
+ * edge rather than beside the back button, so it lines up with everything below it.
+ */
 @Composable
 fun FlowScreenHeader(
     title: String,
@@ -546,35 +666,25 @@ fun FlowScreenHeader(
     onBack: (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = FlowSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (onBack != null) {
-            FlowIconAction(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = stringResource(R.string.content_description_back),
-                onClick = onBack,
-            )
-        } else {
-            Spacer(modifier = Modifier.width(FlowSizes.touchTarget))
-        }
+    Column(modifier = modifier.fillMaxWidth()) {
+        FlowScreenTopBar(
+            leading = onBack?.let {
+                {
+                    FlowIconAction(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.content_description_back),
+                        onClick = it,
+                    )
+                }
+            },
+            trailing = trailing,
+        )
         Text(
             text = title.uppercase(),
             style = MaterialTheme.typography.labelLarge,
             color = FlowTextTertiary,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = FlowSpacing.xs)
-                .semantics { heading() },
+            modifier = Modifier.semantics { heading() },
         )
-        if (trailing != null) {
-            trailing()
-        } else {
-            Spacer(modifier = Modifier.width(FlowSizes.touchTarget))
-        }
     }
 }
 
@@ -622,7 +732,7 @@ fun FlowOptionSheet(
                 if (selected) {
                     Box(
                         modifier = Modifier
-                            .size(6.dp)
+                            .size(FlowSizes.accentDot)
                             .clip(CircleShape)
                             .background(FlowAccent),
                     )
@@ -785,6 +895,36 @@ fun FlowInfoRow(
             style = MaterialTheme.typography.bodyLarge,
             color = FlowTextPrimary,
         )
+    }
+}
+
+/**
+ * A label and its explanation with a switch at the end. The text keeps the
+ * screen's left edge; only the switch moves to the right.
+ */
+@Composable
+fun FlowToggleRow(
+    label: String,
+    supporting: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = FlowSpacing.md),
+        ) {
+            FlowSectionLabel(label)
+            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+            FlowSupportingText(supporting)
+        }
+        FlowSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

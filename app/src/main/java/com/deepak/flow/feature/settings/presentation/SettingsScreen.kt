@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,15 +27,15 @@ import com.deepak.flow.R
 import com.deepak.flow.app.components.AnimatedReveal
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowDialog
-import com.deepak.flow.app.components.FlowHairlineDivider
+import com.deepak.flow.app.components.FlowFieldHeading
 import com.deepak.flow.app.components.FlowInfoRow
 import com.deepak.flow.app.components.FlowScreenHeader
+import com.deepak.flow.app.components.FlowSectionBreak
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSelectorRow
 import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.theme.FlowSpacing
-import com.deepak.flow.app.theme.FlowTextSecondary
 
 @Composable
 fun SettingsScreen(
@@ -86,14 +85,14 @@ fun SettingsScreen(
                 title = stringResource(R.string.settings_title),
                 onBack = onBack,
             )
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            Spacer(modifier = Modifier.height(FlowSpacing.xl))
 
-            SettingsHeading(
+            FlowFieldHeading(
                 label = stringResource(R.string.settings_section_profile),
                 supporting = stringResource(R.string.settings_profile_supporting),
             )
             FlowSectionLabel(stringResource(R.string.settings_label_name))
-            Spacer(modifier = Modifier.height(FlowSpacing.xs))
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
             FlowTextField(
                 value = uiState.displayName,
                 onValueChange = viewModel::updateDisplayName,
@@ -101,7 +100,7 @@ fun SettingsScreen(
             )
             Spacer(modifier = Modifier.height(FlowSpacing.md))
             FlowSectionLabel(stringResource(R.string.settings_label_nickname))
-            Spacer(modifier = Modifier.height(FlowSpacing.xs))
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
             FlowTextField(
                 value = uiState.nickname,
                 onValueChange = viewModel::updateNickname,
@@ -119,8 +118,8 @@ fun SettingsScreen(
                 }
             }
 
-            SectionBreak()
-            SettingsHeading(
+            FlowSectionBreak()
+            FlowFieldHeading(
                 label = stringResource(R.string.settings_section_notifications),
                 supporting = stringResource(R.string.settings_notifications_supporting),
             )
@@ -138,8 +137,8 @@ fun SettingsScreen(
                 },
             )
 
-            SectionBreak()
-            SettingsHeading(
+            FlowSectionBreak()
+            FlowFieldHeading(
                 label = stringResource(R.string.settings_section_data),
                 supporting = stringResource(R.string.settings_data_supporting),
             )
@@ -159,21 +158,3 @@ fun SettingsScreen(
     }
 }
 
-@Composable
-private fun SettingsHeading(label: String, supporting: String) {
-    FlowSectionLabel(label)
-    Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-    Text(
-        text = supporting,
-        style = MaterialTheme.typography.bodyMedium,
-        color = FlowTextSecondary,
-    )
-    Spacer(modifier = Modifier.height(FlowSpacing.md))
-}
-
-@Composable
-private fun SectionBreak() {
-    Spacer(modifier = Modifier.height(FlowSpacing.xl))
-    FlowHairlineDivider()
-    Spacer(modifier = Modifier.height(FlowSpacing.lg))
-}

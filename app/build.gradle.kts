@@ -21,11 +21,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Signed with the debug key so release builds can be sideloaded directly.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -50,6 +53,12 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+// Room exports the schema of every version to app/schemas so that future migrations can
+// be written against the real schema JSON and verified with MigrationTestHelper.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
