@@ -231,6 +231,7 @@ fun CreateReminderScreen(
                     )
                 },
                 onToggleWeekday = viewModel::toggleWeeklyDay,
+                onSetWeekday = viewModel::setWeeklyDay,
                 onMonthlyDayChange = viewModel::updateMonthlyDayInput,
                 onIncrementMonthDay = viewModel::incrementMonthlyDay,
                 onDecrementMonthDay = viewModel::decrementMonthlyDay,

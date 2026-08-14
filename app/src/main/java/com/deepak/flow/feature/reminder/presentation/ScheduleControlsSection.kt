@@ -1,16 +1,31 @@
 package com.deepak.flow.feature.reminder.presentation
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.deepak.flow.R
 import com.deepak.flow.app.components.AnimatedReveal
 import com.deepak.flow.app.components.FlowChip
 import com.deepak.flow.app.components.FlowHairlineDivider
@@ -27,8 +42,8 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.WeekFields
 import java.util.Locale
+import kotlinx.coroutines.withTimeoutOrNull
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ScheduleControlsSection(
     uiState: CreateReminderUiState,
@@ -39,6 +54,7 @@ fun ScheduleControlsSection(
     onChooseIntervalStartTime: () -> Unit,
     onChooseIntervalStartDate: () -> Unit,
     onToggleWeekday: (DayOfWeek) -> Unit,
+    onSetWeekday: (DayOfWeek, Boolean) -> Unit,
     onMonthlyDayChange: (String) -> Unit,
     onIncrementMonthDay: () -> Unit,
     onDecrementMonthDay: () -> Unit,
@@ -73,18 +89,11 @@ fun ScheduleControlsSection(
             ScheduleType.WEEKLY -> {
                 FlowSectionLabel("On")
                 Spacer(modifier = Modifier.height(FlowSpacing.xs))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
-                ) {
-                    orderedWeekdays().forEach { day ->
-                        FlowChip(
-                            label = day.shortLabel(),
-                            selected = day in uiState.weeklyDays,
-                            onClick = { onToggleWeekday(day) },
-                        )
-                    }
-                }
+                WeekdaySwipePicker(
+                    selectedDays = uiState.weeklyDays,
+                    onToggle = onToggleWeekday,
+                    onSetDay = onSetWeekday,
+                )
                 Spacer(modifier = Modifier.height(FlowSpacing.sm))
                 FlowSelectorRow(
                     label = "At",
@@ -164,6 +173,75 @@ fun ScheduleControlsSection(
                     onChooseStartDate = onChooseIntervalStartDate,
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun WeekdaySwipePicker(
+    selectedDays: Set<DayOfWeek>,
+    onToggle: (DayOfWeek) -> Unit,
+    onSetDay: (DayOfWeek, Boolean) -> Unit,
+) {
+    val days = remember { orderedWeekdays() }
+    val bounds = remember { mutableStateMapOf<DayOfWeek, Rect>() }
+    val selectedLatest = rememberUpdatedState(selectedDays)
+    val onToggleLatest = rememberUpdatedState(onToggle)
+    val onSetDayLatest = rememberUpdatedState(onSetDay)
+    val haptic = LocalHapticFeedback.current
+    val description = stringResource(R.string.content_description_weekday_picker)
+
+    fun dayAt(offset: Offset): DayOfWeek? =
+        days.firstOrNull { bounds[it]?.contains(offset) == true }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = description }
+            .pointerInput(days) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val startDay = dayAt(down.position) ?: return@awaitEachGesture
+                    val upBeforeLongPress = withTimeoutOrNull(
+                        viewConfiguration.longPressTimeoutMillis,
+                    ) {
+                        waitForUpOrCancellation()
+                    }
+                    if (upBeforeLongPress != null) {
+                        onToggleLatest.value(startDay)
+                        return@awaitEachGesture
+                    }
+                    val select = startDay !in selectedLatest.value
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onSetDayLatest.value(startDay, select)
+                    val painted = mutableSetOf(startDay)
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) break
+                        change.consume()
+                        val hovered = dayAt(change.position) ?: continue
+                        if (painted.add(hovered)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onSetDayLatest.value(hovered, select)
+                        }
+                    }
+                }
+            },
+        horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
+    ) {
+        days.forEach { day ->
+            FlowChip(
+                label = day.shortLabel(),
+                selected = day in selectedDays,
+                onClick = {},
+                interactive = false,
+                modifier = Modifier
+                    .weight(1f)
+                    .onGloballyPositioned { coords ->
+                        bounds[day] = coords.boundsInParent()
+                    },
+            )
         }
     }
 }

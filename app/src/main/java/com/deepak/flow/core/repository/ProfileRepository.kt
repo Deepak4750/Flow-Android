@@ -9,4 +9,6 @@ interface ProfileRepository {
     fun isOnboardingComplete(): Flow<Boolean>
     suspend fun completeOnboarding(displayName: String?, nickname: String?)
     suspend fun updateProfile(displayName: String?, nickname: String?)
+    suspend fun updateSnoozeEnabled(enabled: Boolean)
+    suspend fun updateSnoozeInterval(minutes: Int)
 }

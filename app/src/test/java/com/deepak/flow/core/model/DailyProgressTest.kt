@@ -28,4 +28,20 @@ class DailyProgressTest {
         assertEquals("33.3%", formatDailyProgressPercent(1f / 3f))
         assertEquals("50%", formatDailyProgressPercent(0.5f))
     }
+
+    @Test
+    fun dotMatrix_fillsEachColumnBottomToTopThenMovesRight() {
+        val columns = 4
+        val rows = 3
+        val filledCount = 4
+        // First column is full (bottom, mid, top). Next column has only its bottom dot.
+        val filled = setOf(8, 4, 0, 9)
+        (0 until columns * rows).forEach { index ->
+            if (index in filled) {
+                assertTrue(isDotMatrixCellFilled(index, filledCount, columns, rows))
+            } else {
+                assertFalse(isDotMatrixCellFilled(index, filledCount, columns, rows))
+            }
+        }
+    }
 }

@@ -155,6 +155,16 @@ class CreateReminderViewModel(
         if (day in days && days.size > 1) days.remove(day) else days.add(day)
         state.copy(weeklyDays = days)
     }
+
+    fun setWeeklyDay(day: DayOfWeek, selected: Boolean) = updateState { state ->
+        val days = state.weeklyDays.toMutableSet()
+        if (selected) {
+            days.add(day)
+        } else if (days.size > 1) {
+            days.remove(day)
+        }
+        state.copy(weeklyDays = days)
+    }
     fun updateMonthlyDay(value: Int) = updateState {
         it.copy(monthlyDay = value.coerceIn(1, 31))
     }

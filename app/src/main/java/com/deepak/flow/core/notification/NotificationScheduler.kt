@@ -54,6 +54,37 @@ class NotificationScheduler(
         pendingIntent.cancel()
     }
 
+    fun cancelSnooze(reminderId: Long) {
+        val intent = Intent(context, AlarmReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            snoozeRequestCode(reminderId),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
+    fun scheduleSnooze(reminderId: Long, snoozeMinutes: Int) {
+        cancelSnooze(reminderId)
+        val triggerAtMillis = System.currentTimeMillis() + snoozeMinutes * 60_000L
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra(AlarmReceiver.EXTRA_REMINDER_ID, reminderId)
+            putExtra(AlarmReceiver.EXTRA_IS_SNOOZE, true)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            snoozeRequestCode(reminderId),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        scheduleExactOrFallback(triggerAtMillis, pendingIntent)
+    }
+
+    private fun snoozeRequestCode(reminderId: Long): Int =
+        (reminderId + 1_000_000L).toInt()
+
     fun calculateNextOccurrenceForReminder(reminder: Reminder, referenceInstant: Instant): Instant? {
         return schedulingEngine.calculateNextOccurrence(
             reminder = reminder,

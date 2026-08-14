@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
+import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ReminderRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +18,8 @@ data class SettingsUiState(
     val nickname: String = "",
     val savedDisplayName: String = "",
     val savedNickname: String = "",
+    val snoozeEnabled: Boolean = SnoozeSettings.DEFAULT_ENABLED,
+    val snoozeIntervalMinutes: Int = SnoozeSettings.DEFAULT_INTERVAL_MINUTES,
     val reminderCount: Int = 0,
     val isSaving: Boolean = false,
 ) {
@@ -43,15 +46,24 @@ class SettingsViewModel(
                 val displayName = profile?.displayName.orEmpty()
                 val nickname = profile?.nickname.orEmpty()
                 _uiState.update { state ->
+                    val snoozeEnabled = profile?.snoozeEnabled ?: SnoozeSettings.DEFAULT_ENABLED
+                    val snooze = profile?.snoozeIntervalMinutes ?: SnoozeSettings.DEFAULT_INTERVAL_MINUTES
                     // Never overwrite text the user is currently editing.
                     if (state.hasUnsavedChanges) {
-                        state.copy(savedDisplayName = displayName, savedNickname = nickname)
+                        state.copy(
+                            savedDisplayName = displayName,
+                            savedNickname = nickname,
+                            snoozeEnabled = snoozeEnabled,
+                            snoozeIntervalMinutes = snooze,
+                        )
                     } else {
                         state.copy(
                             displayName = displayName,
                             nickname = nickname,
                             savedDisplayName = displayName,
                             savedNickname = nickname,
+                            snoozeEnabled = snoozeEnabled,
+                            snoozeIntervalMinutes = snooze,
                         )
                     }
                 }
@@ -90,6 +102,36 @@ class SettingsViewModel(
     fun deleteAllReminders() {
         viewModelScope.launch {
             reminderRepository.deleteAllReminders()
+        }
+    }
+
+    fun setSnoozeEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(snoozeEnabled = enabled) }
+        viewModelScope.launch {
+            profileRepository.updateSnoozeEnabled(enabled)
+        }
+    }
+
+    fun incrementSnoozeInterval() {
+        val next = uiState.value.snoozeIntervalMinutes + SnoozeSettings.STEP_MINUTES
+        updateSnoozeInterval(SnoozeSettings.coerceIntervalMinutes(next))
+    }
+
+    fun decrementSnoozeInterval() {
+        val next = uiState.value.snoozeIntervalMinutes - SnoozeSettings.STEP_MINUTES
+        updateSnoozeInterval(SnoozeSettings.coerceIntervalMinutes(next))
+    }
+
+    fun onSnoozeIntervalInput(raw: String) {
+        if (raw.isEmpty()) return
+        val parsed = raw.toIntOrNull() ?: return
+        updateSnoozeInterval(SnoozeSettings.coerceIntervalMinutes(parsed))
+    }
+
+    private fun updateSnoozeInterval(minutes: Int) {
+        _uiState.update { it.copy(snoozeIntervalMinutes = minutes) }
+        viewModelScope.launch {
+            profileRepository.updateSnoozeInterval(minutes)
         }
     }
 }

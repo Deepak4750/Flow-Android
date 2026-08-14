@@ -33,9 +33,12 @@ import com.deepak.flow.app.components.FlowScreenHeader
 import com.deepak.flow.app.components.FlowSectionBreak
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSelectorRow
+import com.deepak.flow.app.components.FlowStepper
 import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
+import com.deepak.flow.app.components.FlowToggleRow
 import com.deepak.flow.app.theme.FlowSpacing
+import com.deepak.flow.core.model.SnoozeSettings
 
 @Composable
 fun SettingsScreen(
@@ -136,6 +139,29 @@ fun SettingsScreen(
                     context.startActivity(intent)
                 },
             )
+            Spacer(modifier = Modifier.height(FlowSpacing.md))
+            FlowToggleRow(
+                label = stringResource(R.string.settings_label_snooze_enable),
+                supporting = stringResource(R.string.settings_snooze_supporting),
+                checked = uiState.snoozeEnabled,
+                onCheckedChange = viewModel::setSnoozeEnabled,
+            )
+            AnimatedReveal(visible = uiState.snoozeEnabled) {
+                Column {
+                    Spacer(modifier = Modifier.height(FlowSpacing.sm))
+                    FlowStepper(
+                        label = stringResource(R.string.settings_label_snooze),
+                        value = uiState.snoozeIntervalMinutes,
+                        unitLabel = stringResource(R.string.settings_unit_minutes),
+                        valueDescription = stringResource(R.string.settings_snooze_value_description),
+                        onValueChange = viewModel::onSnoozeIntervalInput,
+                        onIncrement = viewModel::incrementSnoozeInterval,
+                        onDecrement = viewModel::decrementSnoozeInterval,
+                        min = SnoozeSettings.MIN_INTERVAL_MINUTES,
+                        max = SnoozeSettings.MAX_INTERVAL_MINUTES,
+                    )
+                }
+            }
 
             FlowSectionBreak()
             FlowFieldHeading(

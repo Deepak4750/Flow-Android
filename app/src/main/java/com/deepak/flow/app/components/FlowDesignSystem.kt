@@ -13,9 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -56,6 +54,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -64,6 +63,7 @@ import kotlin.math.roundToInt
 import com.deepak.flow.R
 import com.deepak.flow.app.theme.FlowAccent
 import com.deepak.flow.core.model.formatDailyProgressPercent
+import com.deepak.flow.core.model.isDotMatrixCellFilled
 import com.deepak.flow.app.theme.FlowBlack
 import com.deepak.flow.app.theme.FlowBorder
 import com.deepak.flow.app.theme.FlowBorderStrong
@@ -580,6 +580,7 @@ fun FlowChip(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    interactive: Boolean = true,
 ) {
     val haptic = LocalHapticFeedback.current
     val background by animateColorAsState(
@@ -605,11 +606,17 @@ fun FlowChip(
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = FlowSizes.touchTarget)
-            .clickable(
-                role = Role.RadioButton,
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onClick()
+            .then(
+                if (interactive) {
+                    Modifier.clickable(
+                        role = Role.RadioButton,
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onClick()
+                        },
+                    )
+                } else {
+                    Modifier
                 },
             ),
         contentAlignment = Alignment.Center,
@@ -657,7 +664,7 @@ fun FlowStepper(
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
         ) {
             FlowIconAction(
                 icon = Icons.Default.Remove,
@@ -666,22 +673,29 @@ fun FlowStepper(
                 enabled = value > min,
                 iconSize = FlowSizes.iconSm,
             )
-            BasicTextField(
-                value = value.toString(),
-                onValueChange = onValueChange,
+            Box(
                 modifier = Modifier
                     .width(StepperValueWidth)
-                    .defaultMinSize(minHeight = FlowSizes.touchTarget),
-                textStyle = MaterialTheme.typography.headlineMedium.copy(color = FlowTextPrimary),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                cursorBrush = SolidColor(FlowWhite),
-            )
+                    .height(FlowSizes.touchTarget),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicTextField(
+                    value = value.toString(),
+                    onValueChange = onValueChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.headlineMedium.copy(
+                        color = FlowTextPrimary,
+                        textAlign = TextAlign.Center,
+                    ),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    cursorBrush = SolidColor(FlowWhite),
+                )
+            }
             Text(
                 text = unitLabel,
                 style = MaterialTheme.typography.bodyLarge,
                 color = FlowTextSecondary,
-                modifier = Modifier.weight(1f),
             )
             FlowIconAction(
                 icon = Icons.Default.Add,
@@ -917,33 +931,40 @@ fun FlowDrawerItem(
 }
 
 /**
- * Nothing-style dot matrix: a fixed grid of dots, filled left-to-right by progress.
- * The percentage sits directly beneath, formatted to at most one decimal place.
+ * Nothing-style dot matrix: each column fills from the bottom up, then progress
+ * moves right. The percentage sits beneath, formatted to at most one decimal.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun FlowDotMatrixProgress(
     progress: Float,
     modifier: Modifier = Modifier,
-    dotCount: Int = 24,
-    columns: Int = 12,
+    columns: Int = 18,
+    rows: Int = 3,
 ) {
     val clamped = progress.coerceIn(0f, 1f)
+    val dotCount = columns * rows
     val filledCount = (clamped * dotCount).roundToInt()
 
     Column(modifier = modifier.fillMaxWidth()) {
-        FlowRow(
-            maxItemsInEachRow = columns,
-            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
-            verticalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
-        ) {
-            repeat(dotCount) { index ->
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(if (index < filledCount) FlowWhite else FlowBorder),
-                )
+        Column(verticalArrangement = Arrangement.spacedBy(FlowSpacing.xs)) {
+            repeat(rows) { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs)) {
+                    repeat(columns) { col ->
+                        val index = row * columns + col
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (isDotMatrixCellFilled(index, filledCount, columns, rows)) {
+                                        FlowWhite
+                                    } else {
+                                        FlowBorder
+                                    },
+                                ),
+                        )
+                    }
+                }
             }
         }
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
