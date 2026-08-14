@@ -56,19 +56,32 @@ class AppUpdateRepository(
     }
 
     private fun open(url: String): HttpURLConnection {
-        val connection = URI(url).toURL().openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 60_000
-        connection.instanceFollowRedirects = true
-        connection.useCaches = false
-        connection.setRequestProperty("User-Agent", "Flow/${BuildConfig.VERSION_NAME}")
-        connection.setRequestProperty("Cache-Control", "no-cache")
-        return connection
+        var current = url
+        repeat(MAX_REDIRECTS) {
+            val connection = URI(current).toURL().openConnection() as HttpURLConnection
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 60_000
+            connection.instanceFollowRedirects = false
+            connection.useCaches = false
+            connection.setRequestProperty("User-Agent", "Flow/${BuildConfig.VERSION_NAME}")
+            connection.setRequestProperty("Cache-Control", "no-cache")
+            val code = connection.responseCode
+            if (code in 300..399) {
+                val location = connection.getHeaderField("Location")
+                    ?: error("Redirect without Location")
+                connection.disconnect()
+                current = URI(current).resolve(location).toString()
+            } else {
+                return connection
+            }
+        }
+        error("Too many redirects")
     }
 
     companion object {
         const val DEFAULT_MANIFEST_URL =
             "https://raw.githubusercontent.com/Deepak4750/Flow-Releases/main/latest.json"
         private const val MIN_APK_BYTES = 50_000L
+        private const val MAX_REDIRECTS = 5
     }
 }
