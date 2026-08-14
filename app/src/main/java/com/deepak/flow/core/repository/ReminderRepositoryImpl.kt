@@ -1,6 +1,8 @@
 package com.deepak.flow.core.repository
 
 import com.deepak.flow.core.database.ReminderDao
+import com.deepak.flow.core.database.ReminderCompletionDao
+import com.deepak.flow.core.database.ReminderDayCompletionEntity
 import com.deepak.flow.core.database.ReminderEntity
 import com.deepak.flow.core.model.ActiveHours
 import com.deepak.flow.core.model.Reminder
@@ -14,6 +16,7 @@ import java.time.LocalDate
 
 class ReminderRepositoryImpl(
     private val dao: ReminderDao,
+    private val completionDao: ReminderCompletionDao,
     private val notificationScheduler: NotificationScheduler,
     private val json: Json = Json {
         ignoreUnknownKeys = true
@@ -47,6 +50,7 @@ class ReminderRepositoryImpl(
 
     override suspend fun deleteReminder(id: Long) {
         notificationScheduler.cancelReminder(id)
+        completionDao.deleteForReminder(id)
         dao.deleteById(id)
     }
 
@@ -54,6 +58,7 @@ class ReminderRepositoryImpl(
         // Alarms are keyed by reminder id, so every pending one must be cancelled
         // before the rows disappear.
         dao.getAllIds().forEach { notificationScheduler.cancelReminder(it) }
+        completionDao.deleteAll()
         dao.deleteAll()
     }
 
@@ -75,6 +80,23 @@ class ReminderRepositoryImpl(
         dao.getAllIds().forEach { notificationScheduler.cancelReminder(it) }
         dao.getEnabled().forEach { entity ->
             notificationScheduler.scheduleNextOccurrence(entity.toDomain(json))
+        }
+    }
+
+    override fun observeTodayCompletions(dateEpochDay: Long): Flow<Set<Long>> =
+        completionDao.observeCompletedIdsForDate(dateEpochDay).map { it.toSet() }
+
+    override suspend fun setTodayCompletion(reminderId: Long, dateEpochDay: Long, completed: Boolean) {
+        if (completed) {
+            completionDao.insert(
+                ReminderDayCompletionEntity(
+                    reminderId = reminderId,
+                    dateEpochDay = dateEpochDay,
+                    completedAtEpochMilli = System.currentTimeMillis(),
+                ),
+            )
+        } else {
+            completionDao.deleteForReminderOnDate(reminderId, dateEpochDay)
         }
     }
 }

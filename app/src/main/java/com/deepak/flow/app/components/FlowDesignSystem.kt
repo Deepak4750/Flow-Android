@@ -13,7 +13,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,8 +60,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import kotlin.math.roundToInt
 import com.deepak.flow.R
 import com.deepak.flow.app.theme.FlowAccent
+import com.deepak.flow.core.model.formatDailyProgressPercent
 import com.deepak.flow.app.theme.FlowBlack
 import com.deepak.flow.app.theme.FlowBorder
 import com.deepak.flow.app.theme.FlowBorderStrong
@@ -908,6 +912,45 @@ fun FlowDrawerItem(
             text = label,
             style = MaterialTheme.typography.titleMedium,
             color = labelColor,
+        )
+    }
+}
+
+/**
+ * Nothing-style dot matrix: a fixed grid of dots, filled left-to-right by progress.
+ * The percentage sits directly beneath, formatted to at most one decimal place.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun FlowDotMatrixProgress(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    dotCount: Int = 24,
+    columns: Int = 12,
+) {
+    val clamped = progress.coerceIn(0f, 1f)
+    val filledCount = (clamped * dotCount).roundToInt()
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        FlowRow(
+            maxItemsInEachRow = columns,
+            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
+        ) {
+            repeat(dotCount) { index ->
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(if (index < filledCount) FlowWhite else FlowBorder),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        Text(
+            text = formatDailyProgressPercent(clamped),
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = FlowTextPrimary,
         )
     }
 }

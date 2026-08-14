@@ -5,6 +5,7 @@ import com.deepak.flow.core.model.Category
 import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.model.Schedule
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -238,5 +239,29 @@ class SchedulingEngineTest {
             zone,
         )
         assertNull(next)
+    }
+
+    @Test
+    fun isScheduledOnDate_dailyOnMatchingDay() {
+        val date = LocalDate.of(2026, 3, 10)
+        assertTrue(engine.isScheduledOnDate(reminder(), date, zone))
+    }
+
+    @Test
+    fun isScheduledOnDate_falseBeforeStartDate() {
+        val date = LocalDate.of(2025, 12, 31)
+        assertFalse(engine.isScheduledOnDate(reminder(startDate = LocalDate.of(2026, 1, 1)), date, zone))
+    }
+
+    @Test
+    fun isScheduledOnDate_weeklyOnlyOnSelectedDays() {
+        val monday = LocalDate.of(2026, 3, 9)
+        val tuesday = LocalDate.of(2026, 3, 10)
+        val weekly = reminder(
+            schedule = Schedule.Weekly(setOf(DayOfWeek.MONDAY)),
+            startDate = monday,
+        )
+        assertTrue(engine.isScheduledOnDate(weekly, monday, zone))
+        assertFalse(engine.isScheduledOnDate(weekly, tuesday, zone))
     }
 }

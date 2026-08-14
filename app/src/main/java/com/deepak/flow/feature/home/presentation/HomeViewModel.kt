@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
+import com.deepak.flow.core.model.DailyProgress
 import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ReminderRepository
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
@@ -24,6 +26,9 @@ data class HomeUiState(
     val profileName: String? = null,
     val nextReminder: Reminder? = null,
     val nextReminderInstant: Instant? = null,
+    val dailyProgress: DailyProgress = DailyProgress(0, 0),
+    val completedTodayIds: Set<Long> = emptySet(),
+    val todayEpochDay: Long = LocalDate.now().toEpochDay(),
 )
 
 fun greetingForTime(time: LocalTime, nickname: String? = null): String {
@@ -51,7 +56,8 @@ class HomeViewModel(
     val uiState: StateFlow<HomeUiState> = combine(
         repository.observeReminders(),
         profileRepository.observeProfile(),
-    ) { reminders, profile ->
+        repository.observeTodayCompletions(LocalDate.now(zoneId).toEpochDay()),
+    ) { reminders, profile, completedToday ->
         val nickname = profile?.nickname?.takeIf { it.isNotBlank() }
         val userLabel = if (nickname == null) {
             profile?.displayName?.takeIf { it.isNotBlank() }
@@ -59,6 +65,7 @@ class HomeViewModel(
             null
         }
         val now = Instant.now()
+        val today = LocalDate.now(zoneId)
         val enabled = reminders.filter { it.enabled }
         val nextPair = enabled
             .mapNotNull { reminder ->
@@ -68,6 +75,9 @@ class HomeViewModel(
             }
             .minByOrNull { it.second }
 
+        val scheduledToday = enabled.filter { schedulingEngine.isScheduledOnDate(it, today, zoneId) }
+        val completedCount = scheduledToday.count { it.id in completedToday }
+
         HomeUiState(
             reminders = reminders,
             greeting = greetingForTime(LocalTime.now(), nickname),
@@ -75,6 +85,12 @@ class HomeViewModel(
             profileName = profile?.displayName?.takeIf { it.isNotBlank() } ?: nickname,
             nextReminder = nextPair?.first,
             nextReminderInstant = nextPair?.second,
+            dailyProgress = DailyProgress(
+                totalTasks = scheduledToday.size,
+                completedTasks = completedCount,
+            ),
+            completedTodayIds = completedToday,
+            todayEpochDay = today.toEpochDay(),
         )
     }.stateIn(
         scope = viewModelScope,
@@ -91,6 +107,16 @@ class HomeViewModel(
     fun toggleReminderEnabled(id: Long, enabled: Boolean) {
         viewModelScope.launch {
             repository.setReminderEnabled(id, enabled)
+        }
+    }
+
+    fun toggleTodayCompletion(reminderId: Long, completed: Boolean) {
+        viewModelScope.launch {
+            repository.setTodayCompletion(
+                reminderId = reminderId,
+                dateEpochDay = LocalDate.now(zoneId).toEpochDay(),
+                completed = completed,
+            )
         }
     }
 }

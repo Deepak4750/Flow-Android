@@ -39,11 +39,13 @@ class FlowApplication : Application() {
             FlowDatabase::class.java,
             "flow_database",
         ).fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2)
+            .addMigrations(FlowDatabase.MIGRATION_3_4)
             .build()
 
         notificationScheduler = NotificationScheduler(this)
         reminderRepository = ReminderRepositoryImpl(
             dao = database.reminderDao(),
+            completionDao = database.reminderCompletionDao(),
             notificationScheduler = notificationScheduler,
         )
         profileRepository = ProfileRepositoryImpl(

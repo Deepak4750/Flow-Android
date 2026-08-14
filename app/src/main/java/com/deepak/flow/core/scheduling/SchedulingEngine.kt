@@ -170,6 +170,28 @@ class SchedulingEngine {
         return nextActiveStart.toInstant()
     }
 
+    /** Whether this reminder has at least one occurrence on [date]. */
+    fun isScheduledOnDate(
+        reminder: Reminder,
+        date: LocalDate,
+        zoneId: ZoneId,
+    ): Boolean {
+        if (!reminder.enabled) return false
+        if (reminder.reminderTimes.isEmpty()) return false
+        if (date.isBefore(reminder.startDate)) return false
+        if (reminder.endDate != null && date.isAfter(reminder.endDate)) return false
+
+        return when (val schedule = reminder.schedule) {
+            is Schedule.EveryXHours -> true
+            else -> {
+                if (!matchesSchedule(schedule, date, reminder.startDate)) return false
+                reminder.reminderTimes.any { time ->
+                    reminder.activeHours?.isActive(time) != false
+                }
+            }
+        }
+    }
+
     fun isOccurrenceStillValid(
         scheduledInstant: Instant,
         reminder: Reminder,

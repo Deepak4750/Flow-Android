@@ -23,7 +23,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
@@ -46,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepak.flow.R
 import com.deepak.flow.app.components.FlowChip
 import com.deepak.flow.app.components.FlowDialog
+import com.deepak.flow.app.components.FlowDotMatrixProgress
 import com.deepak.flow.app.components.FlowFab
 import com.deepak.flow.app.components.FlowIconAction
 import com.deepak.flow.app.components.FlowMetaText
@@ -68,6 +71,7 @@ import com.deepak.flow.core.model.Category
 import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.model.Schedule
 import com.deepak.flow.core.model.categoryLabel
+import com.deepak.flow.core.scheduling.SchedulingEngine
 import com.deepak.flow.feature.reminder.presentation.flowTimeFormatter
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -134,6 +138,7 @@ fun HomeScreen(
             onEditReminder = onEditReminder,
             onToggleEnabled = viewModel::toggleReminderEnabled,
             onRequestDelete = { pendingDelete = it },
+            onToggleTodayCompletion = viewModel::toggleTodayCompletion,
         )
     }
 }
@@ -148,8 +153,11 @@ private fun HomeContent(
     onEditReminder: (Long) -> Unit,
     onToggleEnabled: (Long, Boolean) -> Unit,
     onRequestDelete: (Reminder) -> Unit,
+    onToggleTodayCompletion: (Long, Boolean) -> Unit,
 ) {
     var categoryFilter by remember { mutableStateOf<Category?>(null) }
+    val schedulingEngine = remember { SchedulingEngine() }
+    val today = remember(zoneId) { LocalDate.now(zoneId) }
     val filteredReminders = remember(uiState.reminders, categoryFilter) {
         if (categoryFilter == null) {
             uiState.reminders
@@ -196,7 +204,13 @@ private fun HomeContent(
                 )
             }
 
-            Spacer(modifier = Modifier.height(FlowSpacing.xl))
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+
+            if (uiState.dailyProgress.hasTasksToday) {
+                DailyProgressSection(progress = uiState.dailyProgress.ratio)
+                Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            }
+
             val next = uiState.nextReminder
             val nextInstant = uiState.nextReminderInstant
             if (next != null && nextInstant != null) {
@@ -229,13 +243,27 @@ private fun HomeContent(
                     reminders = filteredReminders,
                     nextReminderId = next?.id,
                     timeFormatter = timeFormatter,
+                    completedTodayIds = uiState.completedTodayIds,
+                    schedulingEngine = schedulingEngine,
+                    today = today,
+                    zoneId = zoneId,
                     onToggleEnabled = onToggleEnabled,
                     onRequestDelete = onRequestDelete,
                     onEdit = onEditReminder,
+                    onToggleTodayCompletion = onToggleTodayCompletion,
                     modifier = Modifier.weight(1f),
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DailyProgressSection(progress: Float) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        FlowScreenHeading("Today")
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        FlowDotMatrixProgress(progress = progress)
     }
 }
 
@@ -337,9 +365,14 @@ private fun ReminderList(
     reminders: List<Reminder>,
     nextReminderId: Long?,
     timeFormatter: DateTimeFormatter,
+    completedTodayIds: Set<Long>,
+    schedulingEngine: SchedulingEngine,
+    today: LocalDate,
+    zoneId: ZoneId,
     onToggleEnabled: (Long, Boolean) -> Unit,
     onRequestDelete: (Reminder) -> Unit,
     onEdit: (Long) -> Unit,
+    onToggleTodayCompletion: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -348,13 +381,18 @@ private fun ReminderList(
         verticalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
     ) {
         items(reminders, key = { it.id }) { reminder ->
+            val scheduledToday = schedulingEngine.isScheduledOnDate(reminder, today, zoneId)
+            val completedToday = reminder.id in completedTodayIds
             FlowReminderCard(modifier = Modifier.clickable { onEdit(reminder.id) }) {
                 ReminderRowContent(
                     reminder = reminder,
                     isNext = reminder.id == nextReminderId,
                     timeFormatter = timeFormatter,
+                    scheduledToday = scheduledToday,
+                    completedToday = completedToday,
                     onToggleEnabled = { onToggleEnabled(reminder.id, it) },
                     onDelete = { onRequestDelete(reminder) },
+                    onToggleTodayCompletion = { onToggleTodayCompletion(reminder.id, it) },
                 )
             }
         }
@@ -366,8 +404,11 @@ private fun ReminderRowContent(
     reminder: Reminder,
     isNext: Boolean,
     timeFormatter: DateTimeFormatter,
+    scheduledToday: Boolean,
+    completedToday: Boolean,
     onToggleEnabled: (Boolean) -> Unit,
     onDelete: () -> Unit,
+    onToggleTodayCompletion: (Boolean) -> Unit,
 ) {
     val titleColor = if (reminder.enabled) FlowTextPrimary else FlowTextDisabled
     val supportingColor = if (reminder.enabled) FlowTextSecondary else FlowTextDisabled
@@ -377,6 +418,19 @@ private fun ReminderRowContent(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top,
     ) {
+        if (scheduledToday) {
+            FlowIconAction(
+                icon = if (completedToday) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                contentDescription = if (completedToday) {
+                    "Mark ${reminder.title} incomplete"
+                } else {
+                    "Mark ${reminder.title} done for today"
+                },
+                onClick = { onToggleTodayCompletion(!completedToday) },
+                iconSize = FlowSizes.iconMd,
+            )
+            Spacer(modifier = Modifier.width(FlowSpacing.xs))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = reminder.title,

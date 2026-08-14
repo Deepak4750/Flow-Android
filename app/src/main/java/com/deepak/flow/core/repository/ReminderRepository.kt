@@ -12,4 +12,6 @@ interface ReminderRepository {
     suspend fun deleteAllReminders()
     suspend fun setReminderEnabled(id: Long, enabled: Boolean)
     suspend fun rescheduleAllEnabledReminders()
+    fun observeTodayCompletions(dateEpochDay: Long): Flow<Set<Long>>
+    suspend fun setTodayCompletion(reminderId: Long, dateEpochDay: Long, completed: Boolean)
 }
