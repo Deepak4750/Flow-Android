@@ -79,8 +79,7 @@ class AppUpdateRepository(
     }
 
     companion object {
-        const val DEFAULT_MANIFEST_URL =
-            "https://raw.githubusercontent.com/Deepak4750/Flow-Releases/main/latest.json"
+        const val DEFAULT_MANIFEST_URL = UpdateManifestUrls.RELEASE
         private const val MIN_APK_BYTES = 50_000L
         private const val MAX_REDIRECTS = 5
     }

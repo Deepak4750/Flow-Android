@@ -83,4 +83,6 @@
     <string name="update_needs_permission">Allow Flow to install updates, then come back.</string>
     <string name="action_install">Install</string>
     <string name="action_later">Later</string>
+    <string name="update_preview_label">Preview updates</string>
+    <string name="update_preview_supporting">You see new builds before anyone else.</string>
 </resources>

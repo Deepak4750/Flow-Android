@@ -26,23 +26,53 @@ data class AppUpdateUiState(
     val available: AppUpdateManifest? = null,
     val promptVisible: Boolean = false,
     val downloadedApk: File? = null,
+    val previewEnabled: Boolean = false,
+    val previewUnlocked: Boolean = false,
 )
 
 class AppUpdateViewModel(
     application: Application,
-    private val repository: AppUpdateRepository = AppUpdateRepository(),
+    private val channel: UpdateChannel = UpdateChannel(application),
 ) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(AppUpdateUiState())
+    private val _uiState = MutableStateFlow(
+        AppUpdateUiState(
+            previewEnabled = channel.previewEnabled,
+            previewUnlocked = channel.previewEnabled,
+        ),
+    )
     val uiState: StateFlow<AppUpdateUiState> = _uiState.asStateFlow()
 
     init {
         checkQuietly()
     }
 
+    private fun repository(): AppUpdateRepository =
+        AppUpdateRepository(channel.manifestUrl())
+
+    fun setPreviewEnabled(enabled: Boolean) {
+        channel.previewEnabled = enabled
+        _uiState.update {
+            it.copy(
+                previewEnabled = enabled,
+                previewUnlocked = it.previewUnlocked || enabled,
+                status = AppUpdateStatus.Idle,
+                available = null,
+                promptVisible = false,
+            )
+        }
+        if (enabled) {
+            checkQuietly()
+        }
+    }
+
+    fun unlockPreviewControls() {
+        _uiState.update { it.copy(previewUnlocked = true) }
+    }
+
     fun checkQuietly() {
         viewModelScope.launch {
-            val manifest = repository.fetchManifest().getOrNull() ?: return@launch
+            val manifest = repository().fetchManifest().getOrNull() ?: return@launch
             if (!manifest.isNewerThan(BuildConfig.VERSION_CODE)) return@launch
             _uiState.update {
                 it.copy(
@@ -57,7 +87,7 @@ class AppUpdateViewModel(
     fun checkNow() {
         viewModelScope.launch {
             _uiState.update { it.copy(status = AppUpdateStatus.Checking) }
-            val result = repository.fetchManifest()
+            val result = repository().fetchManifest()
             val manifest = result.getOrNull()
             when {
                 manifest == null -> _uiState.update {
@@ -91,7 +121,7 @@ class AppUpdateViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(status = AppUpdateStatus.Downloading) }
             val destination = File(File(context.cacheDir, "updates"), "Flow-update.apk")
-            val downloaded = repository.downloadApk(manifest.apkUrl, destination).getOrNull()
+            val downloaded = repository().downloadApk(manifest.apkUrl, destination).getOrNull()
             if (downloaded == null) {
                 _uiState.update { it.copy(status = AppUpdateStatus.Failed) }
                 return@launch
