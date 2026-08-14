@@ -61,6 +61,16 @@ data class CreateReminderUiState(
             !isLoading &&
             (category != Category.CUSTOM || customCategoryName.isNotBlank())
 
+    val hasPendingEdits: Boolean
+        get() = if (isEditMode) {
+            hasUnsavedChanges
+        } else {
+            task.isNotBlank() ||
+                customCategoryName.isNotBlank() ||
+                note.isNotBlank() ||
+                reason.isNotBlank()
+        }
+
     val isIntervalSchedule: Boolean
         get() = scheduleType == ScheduleType.EVERY_X_DAYS || scheduleType == ScheduleType.EVERY_X_HOURS
 }

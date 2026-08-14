@@ -33,4 +33,27 @@ class CreateReminderIntervalTest {
         )
         assertEquals(1, hoursAfterClear.everyXHours)
     }
+
+    @Test
+    fun hasPendingEdits_createModeTracksTypedContent() {
+        assertEquals(false, CreateReminderUiState().hasPendingEdits)
+        assertEquals(true, CreateReminderUiState(task = "Gym").hasPendingEdits)
+        assertEquals(true, CreateReminderUiState(note = "Show up").hasPendingEdits)
+    }
+
+    @Test
+    fun hasPendingEdits_editModeUsesUnsavedFlag() {
+        assertEquals(
+            false,
+            CreateReminderUiState(isEditMode = true, task = "Gym").hasPendingEdits,
+        )
+        assertEquals(
+            true,
+            CreateReminderUiState(
+                isEditMode = true,
+                task = "Gym",
+                hasUnsavedChanges = true,
+            ).hasPendingEdits,
+        )
+    }
 }

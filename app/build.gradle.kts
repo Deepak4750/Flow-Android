@@ -15,8 +15,8 @@ android {
         targetSdk = 37
         // Sideloaded APKs only update in place — and keep reminders — when this
         // number is higher than the installed build. Bump it for every APK you share.
-        versionCode = 5
-        versionName = "1.0.2"
+        versionCode = 6
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

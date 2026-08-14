@@ -25,6 +25,10 @@
     <string name="action_keep">Keep</string>
     <string name="action_delete_all">Delete all reminders</string>
     <string name="action_save_profile">Save</string>
+    <string name="action_save_changes">Save</string>
+    <string name="action_discard_changes">No</string>
+    <string name="reminder_unsaved_title">Save changes?</string>
+    <string name="reminder_unsaved_message">You can keep them, or leave as they were.</string>
 
     <!-- Home -->
     <string name="reminder_delete_title">Delete reminder?</string>

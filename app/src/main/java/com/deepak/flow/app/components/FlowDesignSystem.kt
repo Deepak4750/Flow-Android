@@ -906,8 +906,9 @@ fun FlowDialog(
     onDismiss: () -> Unit,
     destructive: Boolean = false,
     confirmEnabled: Boolean = true,
+    onDismissRequest: () -> Unit = onDismiss,
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = onDismissRequest) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
