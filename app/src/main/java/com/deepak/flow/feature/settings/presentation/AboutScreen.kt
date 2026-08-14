@@ -9,7 +9,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -22,12 +21,16 @@ import com.deepak.flow.app.components.FlowSectionBreak
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSupportingText
 import com.deepak.flow.app.theme.FlowSpacing
+import com.deepak.flow.core.update.AppUpdateViewModel
 
 @Composable
 fun AboutScreen(
+    updateViewModel: AppUpdateViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    AppUpdatePrompt(updateViewModel)
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -54,6 +57,8 @@ fun AboutScreen(
                 label = stringResource(R.string.about_label_version),
                 value = BuildConfig.VERSION_NAME,
             )
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            AppUpdateCheckRow(updateViewModel)
 
             FlowSectionBreak()
             FlowSectionLabel(stringResource(R.string.about_label_privacy))

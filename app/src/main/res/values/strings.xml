@@ -63,5 +63,20 @@
     <string name="about_label_version">Version</string>
     <string name="about_label_privacy">Privacy</string>
     <string name="about_privacy">Flow is private and works offline.</string>
-    <string name="about_privacy_detail">Flow stores your reminders on this device only. There is no account, no sync, no analytics, and no network access. Nothing you write here leaves your phone.</string>
+    <string name="about_privacy_detail">Flow stores your reminders on this device only. There is no account, no sync, and no analytics. Flow uses the network only to check for app updates.</string>
+
+    <!-- Updates -->
+    <string name="settings_section_app">App</string>
+    <string name="settings_app_supporting">A quieter way to get a newer Flow.</string>
+    <string name="update_check">Check for update</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_up_to_date">You\'re on the latest Flow.</string>
+    <string name="update_failed">Couldn\'t check right now.</string>
+    <string name="update_available">Flow %1$s is ready.</string>
+    <string name="update_title">A newer Flow is ready</string>
+    <string name="update_message">Version %1$s can be installed over this one. Your reminders stay.</string>
+    <string name="update_downloading">Downloading the update…</string>
+    <string name="update_needs_permission">Allow Flow to install updates, then come back.</string>
+    <string name="action_install">Install</string>
+    <string name="action_later">Later</string>
 </resources>

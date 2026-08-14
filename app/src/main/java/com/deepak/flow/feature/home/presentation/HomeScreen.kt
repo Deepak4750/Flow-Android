@@ -72,7 +72,9 @@ import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.model.Schedule
 import com.deepak.flow.core.model.categoryLabel
 import com.deepak.flow.core.scheduling.SchedulingEngine
+import com.deepak.flow.core.update.AppUpdateViewModel
 import com.deepak.flow.feature.reminder.presentation.flowTimeFormatter
+import com.deepak.flow.feature.settings.presentation.AppUpdatePrompt
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -82,6 +84,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
+    updateViewModel: AppUpdateViewModel,
     onCreateReminder: () -> Unit,
     onEditReminder: (Long) -> Unit,
     onOpenSettings: () -> Unit,
@@ -110,6 +113,8 @@ fun HomeScreen(
             onDismiss = { pendingDelete = null },
         )
     }
+
+    AppUpdatePrompt(updateViewModel)
 
     ModalNavigationDrawer(
         drawerState = drawerState,

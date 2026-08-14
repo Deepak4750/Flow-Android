@@ -843,6 +843,7 @@ fun FlowDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     destructive: Boolean = false,
+    confirmEnabled: Boolean = true,
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -876,6 +877,7 @@ fun FlowDialog(
                 FlowTextAction(
                     text = confirmText,
                     onClick = onConfirm,
+                    enabled = confirmEnabled,
                     destructive = destructive,
                 )
             }

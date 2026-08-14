@@ -39,10 +39,12 @@ import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.components.FlowToggleRow
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.core.model.SnoozeSettings
+import com.deepak.flow.core.update.AppUpdateViewModel
 
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
+    updateViewModel: AppUpdateViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -71,6 +73,8 @@ fun SettingsScreen(
             onDismiss = { confirmDeleteAll = false },
         )
     }
+
+    AppUpdatePrompt(updateViewModel)
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -179,6 +183,13 @@ fun SettingsScreen(
                 enabled = uiState.reminderCount > 0,
                 destructive = true,
             )
+
+            FlowSectionBreak()
+            FlowFieldHeading(
+                label = stringResource(R.string.settings_section_app),
+                supporting = stringResource(R.string.settings_app_supporting),
+            )
+            AppUpdateCheckRow(updateViewModel)
             Spacer(modifier = Modifier.height(FlowSpacing.xxl))
         }
     }

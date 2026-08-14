@@ -48,3 +48,6 @@
 # failures stay readable.
 -keepnames class com.deepak.flow.app.navigation.FlowRoute
 -keepnames class com.deepak.flow.app.navigation.FlowRoute$*
+
+-keep class com.deepak.flow.core.update.** { *; }
+-keep,includedescriptorclasses class com.deepak.flow.core.update.**$$serializer { *; }

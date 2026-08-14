@@ -15,6 +15,7 @@ import com.deepak.flow.FlowApplication
 import com.deepak.flow.FlowViewModelFactory
 import com.deepak.flow.app.navigation.FlowRoute
 import com.deepak.flow.app.theme.FlowTheme
+import com.deepak.flow.core.update.AppUpdateViewModel
 import com.deepak.flow.feature.home.presentation.HomeScreen
 import com.deepak.flow.feature.home.presentation.HomeViewModel
 import com.deepak.flow.feature.onboarding.presentation.OnboardingScreen
@@ -41,6 +42,7 @@ fun FlowApp(modifier: Modifier = Modifier) {
             )
         } else {
             val navController = rememberNavController()
+            val updateViewModel: AppUpdateViewModel = viewModel(factory = factory)
             NavHost(
                 navController = navController,
                 startDestination = FlowRoute.Home,
@@ -50,6 +52,7 @@ fun FlowApp(modifier: Modifier = Modifier) {
                     val viewModel: HomeViewModel = viewModel(factory = factory)
                     HomeScreen(
                         viewModel = viewModel,
+                        updateViewModel = updateViewModel,
                         onCreateReminder = { navController.navigate(FlowRoute.CreateReminder) },
                         onEditReminder = { id ->
                             navController.navigate(FlowRoute.EditReminder(reminderId = id))
@@ -72,11 +75,15 @@ fun FlowApp(modifier: Modifier = Modifier) {
                     val viewModel: SettingsViewModel = viewModel(factory = factory)
                     SettingsScreen(
                         viewModel = viewModel,
+                        updateViewModel = updateViewModel,
                         onBack = { navController.popBackStack() },
                     )
                 }
                 composable<FlowRoute.About> {
-                    AboutScreen(onBack = { navController.popBackStack() })
+                    AboutScreen(
+                        updateViewModel = updateViewModel,
+                        onBack = { navController.popBackStack() },
+                    )
                 }
                 composable<FlowRoute.EditReminder> { backStackEntry ->
                     val route = backStackEntry.toRoute<FlowRoute.EditReminder>()
