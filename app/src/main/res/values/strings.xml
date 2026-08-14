@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Flow</string>
+
+    <!-- Onboarding -->
+    <string name="placeholder_display_name">Your name</string>
+    <string name="placeholder_nickname">e.g. Alex</string>
+
+    <!-- Create / edit reminder -->
+    <string name="placeholder_task">e.g. Morning workout</string>
+    <string name="placeholder_custom_category">e.g. Side project</string>
+    <string name="placeholder_note">e.g. Time to show up.</string>
+    <string name="placeholder_why">e.g. I want to feel more consistent</string>
+
+    <!-- Navigation -->
+    <string name="content_description_open_menu">Open menu</string>
+    <string name="content_description_back">Back</string>
+    <string name="content_description_create_reminder">Create reminder</string>
+    <string name="content_description_delete_reminder">Delete %1$s</string>
+
+    <!-- Actions -->
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_keep">Keep</string>
+    <string name="action_delete_all">Delete all reminders</string>
+    <string name="action_save_profile">Save</string>
+
+    <!-- Home -->
+    <string name="reminder_delete_title">Delete reminder?</string>
+    <string name="reminder_delete_message">“%1$s” and its schedule will be removed. This can\'t be undone.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_profile">Profile</string>
+    <string name="settings_profile_supporting">How Flow addresses you.</string>
+    <string name="settings_label_name">Name</string>
+    <string name="settings_label_nickname">Nickname</string>
+    <string name="settings_section_notifications">Notifications</string>
+    <string name="settings_notifications_supporting">Flow needs notifications to remind you.</string>
+    <string name="settings_label_notifications">Permission</string>
+    <string name="settings_value_allowed">Allowed</string>
+    <string name="settings_value_blocked">Blocked</string>
+    <string name="settings_section_data">Data</string>
+    <string name="settings_data_supporting">Everything stays on this device.</string>
+    <string name="settings_label_reminders">Reminders</string>
+    <string name="settings_delete_all_title">Delete all reminders?</string>
+    <string name="settings_delete_all_message">All %1$d reminders and their alarms will be removed. This can\'t be undone.</string>
+
+    <!-- About -->
+    <string name="about_title">About</string>
+    <string name="about_tagline">A quiet companion for following through.</string>
+    <string name="about_label_version">Version</string>
+    <string name="about_label_privacy">Privacy</string>
+    <string name="about_privacy">Flow is private and works offline.</string>
+    <string name="about_privacy_detail">Flow stores your reminders on this device only. There is no account, no sync, no analytics, and no network access. Nothing you write here leaves your phone.</string>
+</resources>
