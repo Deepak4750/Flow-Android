@@ -12,4 +12,25 @@ class CreateReminderIntervalTest {
         assertEquals(1, CreateReminderViewModel.INTERVAL_HOURS_MIN)
         assertEquals(168, CreateReminderViewModel.INTERVAL_HOURS_MAX)
     }
+
+    @Test
+    fun emptyIntervalInput_defaultsToMinimum() {
+        val state = CreateReminderUiState(everyXDays = 12, everyXHours = 8)
+
+        val daysAfterClear = state.copy(
+            everyXDays = run {
+                val digits = ""
+                if (digits.isEmpty()) CreateReminderViewModel.INTERVAL_DAYS_MIN else 12
+            },
+        )
+        assertEquals(1, daysAfterClear.everyXDays)
+
+        val hoursAfterClear = state.copy(
+            everyXHours = run {
+                val digits = ""
+                if (digits.isEmpty()) CreateReminderViewModel.INTERVAL_HOURS_MIN else 8
+            },
+        )
+        assertEquals(1, hoursAfterClear.everyXHours)
+    }
 }

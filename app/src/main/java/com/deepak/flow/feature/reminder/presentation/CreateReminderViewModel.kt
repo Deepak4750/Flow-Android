@@ -51,6 +51,7 @@ data class CreateReminderUiState(
     val isLoading: Boolean = false,
     val needsNotificationPermission: Boolean = false,
     val enabled: Boolean = true,
+    val hasUnsavedChanges: Boolean = false,
 ) {
     val canSave: Boolean
         get() = task.isNotBlank() &&
@@ -86,51 +87,62 @@ class CreateReminderViewModel(
     )
     val uiState: StateFlow<CreateReminderUiState> = _uiState.asStateFlow()
 
+    private var editBaseline: ReminderFormSnapshot? = null
+
     init {
         editReminderId?.let { loadReminder(it) }
+    }
+
+    private fun publish(state: CreateReminderUiState): CreateReminderUiState {
+        val baseline = editBaseline
+        val hasChanges = baseline != null && ReminderFormSnapshot.from(state) != baseline
+        return state.copy(hasUnsavedChanges = hasChanges)
+    }
+
+    private fun updateState(transform: (CreateReminderUiState) -> CreateReminderUiState) {
+        _uiState.update { current -> publish(transform(current)) }
     }
 
     private fun loadReminder(id: Long) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val reminder = repository.getReminder(id) ?: return@launch
-            _uiState.update {
-                CreateReminderUiState(
-                    isEditMode = true,
-                    editingReminderId = id,
-                    task = reminder.title,
-                    category = reminder.category,
-                    customCategoryName = reminder.customCategoryName.orEmpty(),
-                    scheduleType = reminder.schedule.toScheduleType(),
-                    weeklyDays = (reminder.schedule as? Schedule.Weekly)?.daysOfWeek
-                        ?: setOf(DayOfWeek.MONDAY),
-                    monthlyDay = (reminder.schedule as? Schedule.Monthly)?.dayOfMonth ?: 1,
-                    everyXDays = (reminder.schedule as? Schedule.EveryXDays)?.intervalDays ?: 3,
-                    everyXHours = (reminder.schedule as? Schedule.EveryXHours)?.intervalHours ?: 4,
-                    reminderTime = reminder.reminderTimes.firstOrNull() ?: LocalTime.of(19, 0),
-                    intervalAnchorIsNow = when (reminder.schedule) {
-                        is Schedule.EveryXDays, is Schedule.EveryXHours -> false
-                        else -> true
-                    },
-                    activeHoursEnabled = reminder.activeHours != null,
-                    activeHoursStart = reminder.activeHours?.startTime ?: LocalTime.of(8, 0),
-                    activeHoursEnd = reminder.activeHours?.endTime ?: LocalTime.of(23, 0),
-                    startDate = reminder.startDate,
-                    endDateEnabled = reminder.endDate != null,
-                    endDate = reminder.endDate,
-                    reason = reminder.reason.orEmpty(),
-                    note = reminder.note.orEmpty(),
-                    enabled = reminder.enabled,
-                )
-            }
-            _uiState.update { it.copy(isLoading = false) }
+            val loaded = CreateReminderUiState(
+                isEditMode = true,
+                editingReminderId = id,
+                task = reminder.title,
+                category = reminder.category,
+                customCategoryName = reminder.customCategoryName.orEmpty(),
+                scheduleType = reminder.schedule.toScheduleType(),
+                weeklyDays = (reminder.schedule as? Schedule.Weekly)?.daysOfWeek
+                    ?: setOf(DayOfWeek.MONDAY),
+                monthlyDay = (reminder.schedule as? Schedule.Monthly)?.dayOfMonth ?: 1,
+                everyXDays = (reminder.schedule as? Schedule.EveryXDays)?.intervalDays ?: 3,
+                everyXHours = (reminder.schedule as? Schedule.EveryXHours)?.intervalHours ?: 4,
+                reminderTime = reminder.reminderTimes.firstOrNull() ?: LocalTime.of(19, 0),
+                intervalAnchorIsNow = when (reminder.schedule) {
+                    is Schedule.EveryXDays, is Schedule.EveryXHours -> false
+                    else -> true
+                },
+                activeHoursEnabled = reminder.activeHours != null,
+                activeHoursStart = reminder.activeHours?.startTime ?: LocalTime.of(8, 0),
+                activeHoursEnd = reminder.activeHours?.endTime ?: LocalTime.of(23, 0),
+                startDate = reminder.startDate,
+                endDateEnabled = reminder.endDate != null,
+                endDate = reminder.endDate,
+                reason = reminder.reason.orEmpty(),
+                note = reminder.note.orEmpty(),
+                enabled = reminder.enabled,
+            )
+            editBaseline = ReminderFormSnapshot.from(loaded)
+            _uiState.value = publish(loaded.copy(isLoading = false))
         }
     }
 
-    fun updateTask(value: String) = _uiState.update { it.copy(task = value) }
-    fun updateCategory(value: Category) = _uiState.update { it.copy(category = value) }
-    fun updateCustomCategoryName(value: String) = _uiState.update { it.copy(customCategoryName = value) }
-    fun updateScheduleType(value: ScheduleType) = _uiState.update { state ->
+    fun updateTask(value: String) = updateState { it.copy(task = value) }
+    fun updateCategory(value: Category) = updateState { it.copy(category = value) }
+    fun updateCustomCategoryName(value: String) = updateState { it.copy(customCategoryName = value) }
+    fun updateScheduleType(value: ScheduleType) = updateState { state ->
         val intervalAnchorIsNow = when (value) {
             ScheduleType.EVERY_X_DAYS, ScheduleType.EVERY_X_HOURS ->
                 if (state.isEditMode) state.intervalAnchorIsNow else true
@@ -138,44 +150,48 @@ class CreateReminderViewModel(
         }
         state.copy(scheduleType = value, intervalAnchorIsNow = intervalAnchorIsNow)
     }
-    fun toggleWeeklyDay(day: DayOfWeek) = _uiState.update { state ->
+    fun toggleWeeklyDay(day: DayOfWeek) = updateState { state ->
         val days = state.weeklyDays.toMutableSet()
         if (day in days && days.size > 1) days.remove(day) else days.add(day)
         state.copy(weeklyDays = days)
     }
-    fun updateMonthlyDay(value: Int) = _uiState.update {
+    fun updateMonthlyDay(value: Int) = updateState {
         it.copy(monthlyDay = value.coerceIn(1, 31))
     }
     fun updateMonthlyDayInput(input: String) {
         val digits = input.filter { it.isDigit() }.take(2)
-        val parsed = digits.toIntOrNull()?.coerceIn(1, 31)
-        _uiState.update { state -> state.copy(monthlyDay = parsed ?: state.monthlyDay) }
+        if (digits.isEmpty()) {
+            updateState { it.copy(monthlyDay = 1) }
+            return
+        }
+        val parsed = digits.toIntOrNull()?.coerceIn(1, 31) ?: 1
+        updateState { it.copy(monthlyDay = parsed) }
     }
     fun incrementMonthlyDay() = updateMonthlyDay(_uiState.value.monthlyDay + 1)
     fun decrementMonthlyDay() = updateMonthlyDay(_uiState.value.monthlyDay - 1)
-    fun updateReminderTime(value: LocalTime) = _uiState.update { it.copy(reminderTime = value) }
-    fun setIntervalStartNow() = _uiState.update { it.copy(intervalAnchorIsNow = true) }
-    fun setIntervalStartCustom() = _uiState.update { state ->
+    fun updateReminderTime(value: LocalTime) = updateState { it.copy(reminderTime = value) }
+    fun setIntervalStartNow() = updateState { it.copy(intervalAnchorIsNow = true) }
+    fun setIntervalStartCustom() = updateState { state ->
         state.copy(
             intervalAnchorIsNow = false,
             startDate = if (state.isEditMode) state.startDate else LocalDate.now(),
         )
     }
-    fun setIntervalCustomStart(time: LocalTime) = _uiState.update { state ->
+    fun setIntervalCustomStart(time: LocalTime) = updateState { state ->
         state.copy(
             intervalAnchorIsNow = false,
             reminderTime = time,
             startDate = if (!state.isEditMode) LocalDate.now() else state.startDate,
         )
     }
-    fun setIntervalCustomStartDate(date: LocalDate) = _uiState.update { state ->
+    fun setIntervalCustomStartDate(date: LocalDate) = updateState { state ->
         state.copy(
             intervalAnchorIsNow = false,
             startDate = date,
         )
     }
-    fun updateStartDate(date: LocalDate) = _uiState.update { it.copy(startDate = date) }
-    fun setEndDateEnabled(enabled: Boolean) = _uiState.update { state ->
+    fun updateStartDate(date: LocalDate) = updateState { it.copy(startDate = date) }
+    fun setEndDateEnabled(enabled: Boolean) = updateState { state ->
         state.copy(
             endDateEnabled = enabled,
             endDate = when {
@@ -185,29 +201,37 @@ class CreateReminderViewModel(
             },
         )
     }
-    fun updateEndDate(date: LocalDate) = _uiState.update { it.copy(endDate = date, endDateEnabled = true) }
-    fun toggleAdvanced() = _uiState.update { it.copy(showAdvanced = !it.showAdvanced) }
-    fun setActiveHoursEnabled(enabled: Boolean) = _uiState.update { it.copy(activeHoursEnabled = enabled) }
-    fun updateActiveHoursStart(value: LocalTime) = _uiState.update { it.copy(activeHoursStart = value) }
-    fun updateActiveHoursEnd(value: LocalTime) = _uiState.update { it.copy(activeHoursEnd = value) }
-    fun updateReason(value: String) = _uiState.update { it.copy(reason = value) }
-    fun updateNote(value: String) = _uiState.update { it.copy(note = value) }
+    fun updateEndDate(date: LocalDate) = updateState { it.copy(endDate = date, endDateEnabled = true) }
+    fun toggleAdvanced() = updateState { it.copy(showAdvanced = !it.showAdvanced) }
+    fun setActiveHoursEnabled(enabled: Boolean) = updateState { it.copy(activeHoursEnabled = enabled) }
+    fun updateActiveHoursStart(value: LocalTime) = updateState { it.copy(activeHoursStart = value) }
+    fun updateActiveHoursEnd(value: LocalTime) = updateState { it.copy(activeHoursEnd = value) }
+    fun updateReason(value: String) = updateState { it.copy(reason = value) }
+    fun updateNote(value: String) = updateState { it.copy(note = value) }
 
-    fun updateEveryXDays(value: Int) = _uiState.update {
+    fun updateEveryXDays(value: Int) = updateState {
         it.copy(everyXDays = value.coerceIn(INTERVAL_DAYS_MIN, INTERVAL_DAYS_MAX))
     }
-    fun updateEveryXHours(value: Int) = _uiState.update {
+    fun updateEveryXHours(value: Int) = updateState {
         it.copy(everyXHours = value.coerceIn(INTERVAL_HOURS_MIN, INTERVAL_HOURS_MAX))
     }
     fun updateEveryXDaysInput(input: String) {
         val digits = input.filter { it.isDigit() }.take(3)
-        val parsed = digits.toIntOrNull()?.coerceIn(INTERVAL_DAYS_MIN, INTERVAL_DAYS_MAX)
-        _uiState.update { state -> state.copy(everyXDays = parsed ?: state.everyXDays) }
+        if (digits.isEmpty()) {
+            updateState { it.copy(everyXDays = INTERVAL_DAYS_MIN) }
+            return
+        }
+        val parsed = digits.toIntOrNull()?.coerceIn(INTERVAL_DAYS_MIN, INTERVAL_DAYS_MAX) ?: INTERVAL_DAYS_MIN
+        updateState { it.copy(everyXDays = parsed) }
     }
     fun updateEveryXHoursInput(input: String) {
         val digits = input.filter { it.isDigit() }.take(3)
-        val parsed = digits.toIntOrNull()?.coerceIn(INTERVAL_HOURS_MIN, INTERVAL_HOURS_MAX)
-        _uiState.update { state -> state.copy(everyXHours = parsed ?: state.everyXHours) }
+        if (digits.isEmpty()) {
+            updateState { it.copy(everyXHours = INTERVAL_HOURS_MIN) }
+            return
+        }
+        val parsed = digits.toIntOrNull()?.coerceIn(INTERVAL_HOURS_MIN, INTERVAL_HOURS_MAX) ?: INTERVAL_HOURS_MIN
+        updateState { it.copy(everyXHours = parsed) }
     }
     fun incrementEveryXDays() = updateEveryXDays(_uiState.value.everyXDays + 1)
     fun decrementEveryXDays() = updateEveryXDays(_uiState.value.everyXDays - 1)
@@ -307,4 +331,50 @@ private fun Schedule.toScheduleType(): ScheduleType = when (this) {
     is Schedule.Monthly -> ScheduleType.MONTHLY
     is Schedule.EveryXDays -> ScheduleType.EVERY_X_DAYS
     is Schedule.EveryXHours -> ScheduleType.EVERY_X_HOURS
+}
+
+private data class ReminderFormSnapshot(
+    val task: String,
+    val category: Category,
+    val customCategoryName: String,
+    val scheduleType: ScheduleType,
+    val weeklyDays: Set<DayOfWeek>,
+    val monthlyDay: Int,
+    val everyXDays: Int,
+    val everyXHours: Int,
+    val reminderTime: LocalTime,
+    val intervalAnchorIsNow: Boolean,
+    val activeHoursEnabled: Boolean,
+    val activeHoursStart: LocalTime,
+    val activeHoursEnd: LocalTime,
+    val startDate: LocalDate,
+    val endDateEnabled: Boolean,
+    val endDate: LocalDate?,
+    val reason: String,
+    val note: String,
+    val enabled: Boolean,
+) {
+    companion object {
+        fun from(state: CreateReminderUiState) = ReminderFormSnapshot(
+            task = state.task.trim(),
+            category = state.category,
+            customCategoryName = state.customCategoryName.trim(),
+            scheduleType = state.scheduleType,
+            weeklyDays = state.weeklyDays,
+            monthlyDay = state.monthlyDay,
+            everyXDays = state.everyXDays,
+            everyXHours = state.everyXHours,
+            reminderTime = state.reminderTime,
+            intervalAnchorIsNow = state.intervalAnchorIsNow,
+            activeHoursEnabled = state.activeHoursEnabled,
+            activeHoursStart = state.activeHoursStart,
+            activeHoursEnd = state.activeHoursEnd,
+            startDate = state.startDate,
+            endDateEnabled = state.endDateEnabled,
+            endDate = state.endDate,
+            reason = state.reason.trim(),
+            note = state.note.trim(),
+            enabled = state.enabled,
+        )
+    }
 }

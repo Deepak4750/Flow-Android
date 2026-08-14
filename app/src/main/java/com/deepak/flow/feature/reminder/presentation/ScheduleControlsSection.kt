@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import com.deepak.flow.app.components.AnimatedReveal
 import com.deepak.flow.app.components.FlowChip
 import com.deepak.flow.app.components.FlowHairlineDivider
+import com.deepak.flow.app.components.FlowInlinePickerRow
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSelectorRow
 import com.deepak.flow.app.components.FlowStepper
@@ -27,11 +28,6 @@ import java.time.format.TextStyle
 import java.time.temporal.WeekFields
 import java.util.Locale
 
-/**
- * Only the controls that the selected schedule actually needs are composed.
- * Absolute schedules get a time (and day) picker; interval schedules get an
- * interval plus an explicit anchor, because that is what the engine reads.
- */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ScheduleControlsSection(
@@ -58,13 +54,12 @@ fun ScheduleControlsSection(
     zoneId: ZoneId = ZoneId.systemDefault(),
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        FlowSelectorRow(
+        FlowInlinePickerRow(
             label = "Repeats",
             value = uiState.scheduleType.displayName,
             onClick = onScheduleTypeClick,
         )
-        FlowHairlineDivider()
-        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
 
         when (uiState.scheduleType) {
             ScheduleType.DAILY -> {
@@ -77,7 +72,7 @@ fun ScheduleControlsSection(
 
             ScheduleType.WEEKLY -> {
                 FlowSectionLabel("On")
-                Spacer(modifier = Modifier.height(FlowSpacing.sm))
+                Spacer(modifier = Modifier.height(FlowSpacing.xs))
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
                     verticalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
@@ -90,7 +85,7 @@ fun ScheduleControlsSection(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(FlowSpacing.md))
+                Spacer(modifier = Modifier.height(FlowSpacing.sm))
                 FlowSelectorRow(
                     label = "At",
                     value = uiState.reminderTime.format(timeFormatter),
@@ -110,7 +105,7 @@ fun ScheduleControlsSection(
                     min = 1,
                     max = 31,
                 )
-                Spacer(modifier = Modifier.height(FlowSpacing.md))
+                Spacer(modifier = Modifier.height(FlowSpacing.sm))
                 FlowSelectorRow(
                     label = "At",
                     value = uiState.reminderTime.format(timeFormatter),
@@ -130,7 +125,7 @@ fun ScheduleControlsSection(
                     min = CreateReminderViewModel.INTERVAL_DAYS_MIN,
                     max = CreateReminderViewModel.INTERVAL_DAYS_MAX,
                 )
-                Spacer(modifier = Modifier.height(FlowSpacing.lg))
+                Spacer(modifier = Modifier.height(FlowSpacing.md))
                 IntervalStartControls(
                     uiState = uiState,
                     helperText = intervalDaysHelperText(uiState),
@@ -156,7 +151,7 @@ fun ScheduleControlsSection(
                     min = CreateReminderViewModel.INTERVAL_HOURS_MIN,
                     max = CreateReminderViewModel.INTERVAL_HOURS_MAX,
                 )
-                Spacer(modifier = Modifier.height(FlowSpacing.lg))
+                Spacer(modifier = Modifier.height(FlowSpacing.md))
                 IntervalStartControls(
                     uiState = uiState,
                     helperText = intervalHoursHelperText(uiState),
@@ -173,10 +168,6 @@ fun ScheduleControlsSection(
     }
 }
 
-/**
- * An interval schedule counts forward from an anchor. "Now" means the moment of
- * saving; "Custom" exposes the date and time the engine will count from.
- */
 @Composable
 private fun IntervalStartControls(
     uiState: CreateReminderUiState,
@@ -190,7 +181,7 @@ private fun IntervalStartControls(
     onChooseStartDate: () -> Unit,
 ) {
     FlowSectionLabel("Starts")
-    Spacer(modifier = Modifier.height(FlowSpacing.sm))
+    Spacer(modifier = Modifier.height(FlowSpacing.xs))
     Row(horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs)) {
         FlowChip(
             label = "Now",

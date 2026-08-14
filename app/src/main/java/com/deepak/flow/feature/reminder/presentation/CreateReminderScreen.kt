@@ -6,6 +6,7 @@ import android.content.Context
 import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,7 @@ import com.deepak.flow.app.components.FlowFieldHeading
 import com.deepak.flow.app.components.FlowHairlineDivider
 import com.deepak.flow.app.components.FlowOptionSheet
 import com.deepak.flow.app.components.FlowScreenHeader
+import com.deepak.flow.app.components.FlowScreenHeading
 import com.deepak.flow.app.components.FlowSectionBreak
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSelectorRow
@@ -48,6 +50,7 @@ import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.components.FlowToggleRow
 import com.deepak.flow.app.theme.FlowSpacing
+import com.deepak.flow.app.theme.FlowSurfaceRaised
 import com.deepak.flow.core.model.Category
 import java.time.LocalDate
 import java.time.LocalTime
@@ -76,6 +79,14 @@ fun CreateReminderScreen(
         viewModel.saveReminder(onSaved)
     }
 
+    val saveAction: () -> Unit = {
+        if (viewModel.checkNotificationPermission()) {
+            viewModel.saveReminder(onSaved)
+        } else {
+            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     if (showScheduleSheet) {
         ModalBottomSheet(
             onDismissRequest = { showScheduleSheet = false },
@@ -92,9 +103,29 @@ fun CreateReminderScreen(
         }
     }
 
+    val showStickySave = uiState.isEditMode && uiState.hasUnsavedChanges
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = {
+            if (showStickySave) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(FlowSurfaceRaised)
+                        .imePadding()
+                        .padding(horizontal = FlowSpacing.screenHorizontal)
+                        .padding(top = FlowSpacing.sm, bottom = FlowSpacing.md),
+                ) {
+                    FlowButton(
+                        text = "Save changes",
+                        onClick = saveAction,
+                        enabled = uiState.canSave,
+                    )
+                }
+            }
+        },
     ) { padding ->
         if (uiState.isLoading) {
             Column(
@@ -115,13 +146,20 @@ fun CreateReminderScreen(
                 .padding(padding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = FlowSpacing.screenHorizontal),
+                .padding(horizontal = FlowSpacing.screenHorizontal)
+                .then(
+                    if (showStickySave) {
+                        Modifier.padding(bottom = FlowSpacing.xxl)
+                    } else {
+                        Modifier
+                    },
+                ),
         ) {
             FlowScreenHeader(
                 title = if (uiState.isEditMode) "Edit reminder" else "New reminder",
                 onBack = onBack,
             )
-            Spacer(modifier = Modifier.height(FlowSpacing.xl))
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
 
             FlowFieldHeading(
                 label = "Task",
@@ -133,8 +171,8 @@ fun CreateReminderScreen(
                 placeholder = stringResource(R.string.placeholder_task),
             )
 
-            Spacer(modifier = Modifier.height(FlowSpacing.xl))
-            FlowSectionLabel("Category")
+            FlowSectionBreak()
+            FlowScreenHeading("Category")
             Spacer(modifier = Modifier.height(FlowSpacing.sm))
             Row(
                 modifier = Modifier
@@ -152,7 +190,7 @@ fun CreateReminderScreen(
             }
             AnimatedReveal(visible = uiState.category == Category.CUSTOM) {
                 Column {
-                    Spacer(modifier = Modifier.height(FlowSpacing.md))
+                    Spacer(modifier = Modifier.height(FlowSpacing.sm))
                     FlowTextField(
                         value = uiState.customCategoryName,
                         onValueChange = viewModel::updateCustomCategoryName,
@@ -162,7 +200,7 @@ fun CreateReminderScreen(
             }
 
             FlowSectionBreak()
-            FlowSectionLabel("When")
+            FlowScreenHeading("When")
             Spacer(modifier = Modifier.height(FlowSpacing.sm))
             ScheduleControlsSection(
                 uiState = uiState,
@@ -219,7 +257,7 @@ fun CreateReminderScreen(
                 singleLine = false,
             )
 
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            Spacer(modifier = Modifier.height(FlowSpacing.md))
             FlowTextAction(
                 text = if (uiState.showAdvanced) "Hide advanced" else "Advanced",
                 onClick = viewModel::toggleAdvanced,
@@ -234,18 +272,14 @@ fun CreateReminderScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(FlowSpacing.xl))
-            FlowButton(
-                text = if (uiState.isEditMode) "Save changes" else "Create reminder",
-                onClick = {
-                    if (viewModel.checkNotificationPermission()) {
-                        viewModel.saveReminder(onSaved)
-                    } else {
-                        permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                },
-                enabled = uiState.canSave,
-            )
+            if (!uiState.isEditMode) {
+                Spacer(modifier = Modifier.height(FlowSpacing.xl))
+                FlowButton(
+                    text = "Create reminder",
+                    onClick = saveAction,
+                    enabled = uiState.canSave,
+                )
+            }
             Spacer(modifier = Modifier.height(FlowSpacing.xxl))
         }
     }
@@ -261,9 +295,10 @@ private fun AdvancedSection(
 ) {
     val context = LocalContext.current
     Column {
-        FlowSectionBreak()
+        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        FlowHairlineDivider()
+        Spacer(modifier = Modifier.height(FlowSpacing.lg))
 
-        // Interval schedules set their own anchor date in the When section above.
         if (!uiState.isIntervalSchedule) {
             FlowFieldHeading(
                 label = "Start date",

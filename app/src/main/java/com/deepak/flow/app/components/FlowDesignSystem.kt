@@ -52,6 +52,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -93,6 +94,71 @@ fun FlowSectionLabel(
         color = FlowTextTertiary,
         modifier = modifier,
     )
+}
+
+/**
+ * Primary section heading on form screens and list blocks: Task, When, All reminders.
+ * Bright white and bold so it reads immediately against the black background.
+ */
+@Composable
+fun FlowScreenHeading(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+        color = FlowTextPrimary,
+        modifier = modifier.semantics { heading() },
+    )
+}
+
+/**
+ * Label on the left, tappable value on the right — one row, no stacked labels.
+ * Used for Repeats + schedule type, and similar inline pickers.
+ */
+@Composable
+fun FlowInlinePickerRow(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .defaultMinSize(minHeight = FlowSizes.touchTarget)
+            .padding(vertical = FlowSpacing.xxs),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FlowScreenHeading(label)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+            color = FlowTextPrimary,
+        )
+    }
+}
+
+/** A single reminder in a hairline box — separated from its neighbours. */
+@Composable
+fun FlowReminderCard(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = FlowSpacing.xs)
+            .clip(MaterialTheme.shapes.medium)
+            .border(FlowSizes.hairline, FlowBorder, MaterialTheme.shapes.medium)
+            .background(FlowSurfaceRaised)
+            .padding(FlowSpacing.md),
+    ) {
+        content()
+    }
 }
 
 /**
@@ -145,14 +211,16 @@ fun FlowSupportingText(
 @Composable
 fun FlowFieldHeading(
     label: String,
-    supporting: String,
+    supporting: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        FlowSectionLabel(label)
-        Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-        FlowSupportingText(supporting)
-        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        FlowScreenHeading(label)
+        if (!supporting.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+            FlowSupportingText(supporting)
+        }
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
     }
 }
 
@@ -579,8 +647,10 @@ fun FlowStepper(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        FlowSectionLabel(label)
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        if (label.isNotBlank()) {
+            FlowSectionLabel(label)
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        }
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm),
