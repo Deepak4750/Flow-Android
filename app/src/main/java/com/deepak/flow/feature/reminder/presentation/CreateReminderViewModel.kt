@@ -8,6 +8,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
+import com.deepak.flow.app.theme.CategoryAccent
 import com.deepak.flow.core.model.ActiveHours
 import com.deepak.flow.core.model.Category
 import com.deepak.flow.core.model.Reminder
@@ -47,6 +48,7 @@ data class CreateReminderUiState(
     val endDate: LocalDate? = null,
     val reason: String = "",
     val note: String = "",
+    val accentColorIndex: Int = CategoryAccent.DefaultCustomIndex,
     val isSaving: Boolean = false,
     val isLoading: Boolean = false,
     val needsNotificationPermission: Boolean = false,
@@ -132,6 +134,8 @@ class CreateReminderViewModel(
                 endDate = reminder.endDate,
                 reason = reminder.reason.orEmpty(),
                 note = reminder.note.orEmpty(),
+                accentColorIndex = reminder.accentColorIndex
+                    ?: CategoryAccent.stableIndex(reminder.customCategoryName),
                 enabled = reminder.enabled,
             )
             editBaseline = ReminderFormSnapshot.from(loaded)
@@ -142,6 +146,9 @@ class CreateReminderViewModel(
     fun updateTask(value: String) = updateState { it.copy(task = value) }
     fun updateCategory(value: Category) = updateState { it.copy(category = value) }
     fun updateCustomCategoryName(value: String) = updateState { it.copy(customCategoryName = value) }
+    fun updateAccentColorIndex(index: Int) = updateState {
+        it.copy(accentColorIndex = index.coerceIn(0, CategoryAccent.Palette.lastIndex))
+    }
     fun updateScheduleType(value: ScheduleType) = updateState { state ->
         val intervalAnchorIsNow = when (value) {
             ScheduleType.EVERY_X_DAYS, ScheduleType.EVERY_X_HOURS ->
@@ -316,6 +323,11 @@ class CreateReminderViewModel(
                 },
                 reason = state.reason.takeIf { it.isNotBlank() },
                 note = state.note.takeIf { it.isNotBlank() },
+                accentColorIndex = if (state.category == Category.CUSTOM) {
+                    state.accentColorIndex
+                } else {
+                    null
+                },
             )
             if (state.isEditMode && state.editingReminderId != null) {
                 repository.updateReminder(reminder)
@@ -362,6 +374,7 @@ private data class ReminderFormSnapshot(
     val endDate: LocalDate?,
     val reason: String,
     val note: String,
+    val accentColorIndex: Int,
     val enabled: Boolean,
 ) {
     companion object {
@@ -384,6 +397,7 @@ private data class ReminderFormSnapshot(
             endDate = state.endDate,
             reason = state.reason.trim(),
             note = state.note.trim(),
+            accentColorIndex = state.accentColorIndex,
             enabled = state.enabled,
         )
     }

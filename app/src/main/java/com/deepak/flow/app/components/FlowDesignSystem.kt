@@ -50,6 +50,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -581,6 +582,7 @@ fun FlowChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     interactive: Boolean = true,
+    accent: Color? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     val background by animateColorAsState(
@@ -630,13 +632,73 @@ fun FlowChip(
                 .padding(horizontal = FlowSpacing.sm, vertical = FlowSpacing.xs),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = label.uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                color = foreground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xxs),
+            ) {
+                if (accent != null) {
+                    FlowAccentDot(color = accent)
+                }
+                Text(
+                    text = label.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = foreground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FlowAccentDot(
+    color: Color,
+    modifier: Modifier = Modifier,
+    size: Dp = FlowSizes.accentDot,
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(color),
+    )
+}
+
+@Composable
+fun FlowAccentSwatch(
+    color: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+) {
+    val haptic = LocalHapticFeedback.current
+    Box(
+        modifier = modifier
+            .size(FlowSizes.touchTarget)
+            .clickable(
+                role = Role.RadioButton,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onClick()
+                },
             )
+            .semantics { this.contentDescription = contentDescription },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .border(
+                    FlowSizes.hairline,
+                    if (selected) FlowWhite else Color.Transparent,
+                    CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            FlowAccentDot(color = color, size = 10.dp)
         }
     }
 }

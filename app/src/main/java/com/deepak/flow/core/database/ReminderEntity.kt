@@ -19,4 +19,5 @@ data class ReminderEntity(
     val activeHoursJson: String?,
     val reason: String?,
     val note: String?,
+    val accentColorIndex: Int? = null,
 )

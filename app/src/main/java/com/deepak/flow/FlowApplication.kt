@@ -40,6 +40,7 @@ class FlowApplication : Application() {
                 FlowDatabase.MIGRATION_3_4,
                 FlowDatabase.MIGRATION_4_5,
                 FlowDatabase.MIGRATION_5_6,
+                FlowDatabase.MIGRATION_6_7,
             )
             .build()
 

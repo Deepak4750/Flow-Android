@@ -22,9 +22,28 @@ class ReminderModelTest {
     }
 
     @Test
-    fun category_displayNames() {
-        assertEquals("Health", Category.HEALTH.displayName)
-        assertEquals("Fitness", Category.FITNESS.displayName)
-        assertEquals("Study", Category.STUDY.displayName)
+    fun categoryLabel_usesCustomName() {
+        val reminder = Reminder(
+            title = "Ship",
+            category = Category.CUSTOM,
+            customCategoryName = "Side project",
+            schedule = Schedule.Daily,
+            reminderTimes = listOf(LocalTime.of(19, 0)),
+            startDate = LocalDate.now(),
+        )
+        assertEquals("Side project", reminder.categoryLabel())
+    }
+
+    @Test
+    fun categoryLabel_fallsBackWhenCustomNameBlank() {
+        val reminder = Reminder(
+            title = "Ship",
+            category = Category.CUSTOM,
+            customCategoryName = "  ",
+            schedule = Schedule.Daily,
+            reminderTimes = listOf(LocalTime.of(19, 0)),
+            startDate = LocalDate.now(),
+        )
+        assertEquals("Custom", reminder.categoryLabel())
     }
 }

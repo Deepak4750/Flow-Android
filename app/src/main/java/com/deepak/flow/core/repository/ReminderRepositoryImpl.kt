@@ -114,6 +114,7 @@ private fun ReminderEntity.toDomain(json: Json): Reminder = Reminder(
     activeHours = activeHoursJson?.let { json.decodeFromString(ActiveHours.serializer(), it) },
     reason = reason,
     note = note,
+    accentColorIndex = accentColorIndex,
 )
 
 private fun Reminder.toEntity(json: Json): ReminderEntity = ReminderEntity(
@@ -129,4 +130,5 @@ private fun Reminder.toEntity(json: Json): ReminderEntity = ReminderEntity(
     activeHoursJson = activeHours?.let { json.encodeToString(ActiveHours.serializer(), it) },
     reason = reason,
     note = note,
+    accentColorIndex = accentColorIndex,
 )

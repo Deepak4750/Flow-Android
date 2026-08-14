@@ -1,7 +1,6 @@
 package com.deepak.flow.feature.home.presentation
 
 import android.text.format.DateFormat
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -14,12 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
@@ -40,12 +37,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepak.flow.R
+import com.deepak.flow.app.components.FlowAccentDot
 import com.deepak.flow.app.components.FlowChip
 import com.deepak.flow.app.components.FlowDialog
 import com.deepak.flow.app.components.FlowDotMatrixProgress
@@ -60,6 +57,7 @@ import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSwitch
 import com.deepak.flow.app.navigation.FlowDrawerContent
 import com.deepak.flow.app.navigation.FlowDrawerDestination
+import com.deepak.flow.app.theme.CategoryAccent
 import com.deepak.flow.app.theme.FlowAccent
 import com.deepak.flow.app.theme.FlowSizes
 import com.deepak.flow.app.theme.FlowSpacing
@@ -160,14 +158,36 @@ private fun HomeContent(
     onRequestDelete: (Reminder) -> Unit,
     onToggleTodayCompletion: (Long, Boolean) -> Unit,
 ) {
-    var categoryFilter by remember { mutableStateOf<Category?>(null) }
+    var categoryFilter by remember { mutableStateOf<HomeCategoryFilter>(HomeCategoryFilter.All) }
     val schedulingEngine = remember { SchedulingEngine() }
     val today = remember(zoneId) { LocalDate.now(zoneId) }
+    val customCategoryNames = remember(uiState.reminders) {
+        uiState.reminders
+            .filter { it.category == Category.CUSTOM }
+            .mapNotNull { reminder ->
+                reminder.customCategoryName?.trim()?.takeIf { it.isNotEmpty() }
+            }
+            .distinct()
+            .sorted()
+    }
+    val customAccentByName = remember(uiState.reminders) {
+        uiState.reminders
+            .filter { it.category == Category.CUSTOM }
+            .mapNotNull { reminder ->
+                val name = reminder.customCategoryName?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: return@mapNotNull null
+                name to reminder.accentColorIndex
+            }
+            .distinctBy { it.first }
+            .toMap()
+    }
     val filteredReminders = remember(uiState.reminders, categoryFilter) {
-        if (categoryFilter == null) {
-            uiState.reminders
-        } else {
-            uiState.reminders.filter { it.category == categoryFilter }
+        when (val filter = categoryFilter) {
+            HomeCategoryFilter.All -> uiState.reminders
+            is HomeCategoryFilter.BuiltIn -> uiState.reminders.filter { it.category == filter.category }
+            is HomeCategoryFilter.Named -> uiState.reminders.filter {
+                it.category == Category.CUSTOM && it.categoryLabel() == filter.name
+            }
         }
     }
 
@@ -196,9 +216,10 @@ private fun HomeContent(
                         onClick = onOpenDrawer,
                     )
                 },
+                trailing = {
+                    FlowSectionLabel("Flow")
+                },
             )
-            FlowSectionLabel("Flow")
-            Spacer(modifier = Modifier.height(FlowSpacing.xs))
             FlowScreenTitle(uiState.greeting)
             uiState.userLabel?.let { label ->
                 Spacer(modifier = Modifier.height(FlowSpacing.xxs))
@@ -229,20 +250,17 @@ private fun HomeContent(
                 Spacer(modifier = Modifier.height(FlowSpacing.lg))
             }
 
-            FlowScreenHeading(
-                if (uiState.reminders.isEmpty()) "Reminders" else "All reminders",
-            )
-            if (uiState.reminders.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(FlowSpacing.sm))
-                CategoryFilterRow(
-                    selected = categoryFilter,
-                    onSelect = { categoryFilter = it },
-                )
-            }
-
             if (uiState.reminders.isEmpty()) {
                 EmptyState(modifier = Modifier.weight(1f))
             } else {
+                FlowScreenHeading("All reminders")
+                Spacer(modifier = Modifier.height(FlowSpacing.sm))
+                CategoryFilterRow(
+                    selected = categoryFilter,
+                    customNames = customCategoryNames,
+                    customAccentByName = customAccentByName,
+                    onSelect = { categoryFilter = it },
+                )
                 Spacer(modifier = Modifier.height(FlowSpacing.sm))
                 ReminderList(
                     reminders = filteredReminders,
@@ -274,8 +292,10 @@ private fun DailyProgressSection(progress: Float) {
 
 @Composable
 private fun CategoryFilterRow(
-    selected: Category?,
-    onSelect: (Category?) -> Unit,
+    selected: HomeCategoryFilter,
+    customNames: List<String>,
+    customAccentByName: Map<String, Int?>,
+    onSelect: (HomeCategoryFilter) -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -285,14 +305,29 @@ private fun CategoryFilterRow(
     ) {
         FlowChip(
             label = "All",
-            selected = selected == null,
-            onClick = { onSelect(null) },
+            selected = selected is HomeCategoryFilter.All,
+            onClick = { onSelect(HomeCategoryFilter.All) },
         )
-        Category.entries.forEach { category ->
+        Category.entries
+            .filter { it != Category.CUSTOM }
+            .forEach { category ->
+                FlowChip(
+                    label = category.displayName,
+                    selected = selected is HomeCategoryFilter.BuiltIn && selected.category == category,
+                    onClick = { onSelect(HomeCategoryFilter.BuiltIn(category)) },
+                    accent = CategoryAccent.forCategory(category),
+                )
+            }
+        customNames.forEach { name ->
             FlowChip(
-                label = category.displayName,
-                selected = selected == category,
-                onClick = { onSelect(category) },
+                label = name,
+                selected = selected is HomeCategoryFilter.Named && selected.name == name,
+                onClick = { onSelect(HomeCategoryFilter.Named(name)) },
+                accent = CategoryAccent.forCategory(
+                    category = Category.CUSTOM,
+                    customName = name,
+                    paletteIndex = customAccentByName[name],
+                ),
             )
         }
     }
@@ -315,12 +350,7 @@ private fun NextUpSection(
             .clickable(onClick = onClick),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(FlowSizes.accentDot)
-                    .clip(CircleShape)
-                    .background(FlowAccent),
-            )
+            FlowAccentDot(color = FlowAccent)
             Spacer(modifier = Modifier.width(FlowSpacing.xs))
             FlowScreenHeading("Next up")
         }
@@ -346,10 +376,10 @@ private fun EmptyState(
     modifier: Modifier = Modifier,
 ) {
     Box(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.CenterStart,
     ) {
-        Column(modifier = Modifier.padding(vertical = FlowSpacing.xxl)) {
+        Column {
             Text(
                 text = "Nothing scheduled yet.",
                 style = MaterialTheme.typography.titleLarge,
@@ -445,10 +475,20 @@ private fun ReminderRowContent(
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-            FlowMetaText(
-                text = "${reminder.categoryLabel()} · ${scheduleSummary(reminder)}",
-                color = metaColor,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FlowAccentDot(
+                    color = CategoryAccent.forCategory(
+                        category = reminder.category,
+                        customName = reminder.customCategoryName,
+                        paletteIndex = reminder.accentColorIndex,
+                    ),
+                )
+                Spacer(modifier = Modifier.width(FlowSpacing.xxs))
+                FlowMetaText(
+                    text = "${reminder.categoryLabel()} · ${scheduleSummary(reminder)}",
+                    color = metaColor,
+                )
+            }
             Spacer(modifier = Modifier.height(FlowSpacing.xs))
             Text(
                 text = reminderTimeLabel(reminder, timeFormatter),
@@ -468,12 +508,7 @@ private fun ReminderRowContent(
             if (isNext && reminder.enabled) {
                 Spacer(modifier = Modifier.height(FlowSpacing.xs))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(FlowSizes.accentDot)
-                            .clip(CircleShape)
-                            .background(FlowAccent),
-                    )
+                    FlowAccentDot(color = FlowAccent)
                     Spacer(modifier = Modifier.width(FlowSpacing.xxs))
                     FlowMetaText("Next", color = FlowAccent)
                 }
@@ -521,4 +556,10 @@ private fun formatWhenLabel(date: LocalDate, zoneId: ZoneId): String {
         date.isEqual(today.plusDays(1)) -> "Tomorrow"
         else -> date.format(DateTimeFormatter.ofPattern("EEE, d MMM"))
     }
+}
+
+private sealed interface HomeCategoryFilter {
+    data object All : HomeCategoryFilter
+    data class BuiltIn(val category: Category) : HomeCategoryFilter
+    data class Named(val name: String) : HomeCategoryFilter
 }

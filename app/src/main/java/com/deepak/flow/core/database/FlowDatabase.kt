@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         UserProfileEntity::class,
         ReminderDayCompletionEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(DatabaseConverters::class)
@@ -55,6 +55,17 @@ abstract class FlowDatabase : RoomDatabase() {
                     table = "user_profile",
                     column = "snoozeEnabled",
                     spec = "INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "reminders",
+                    column = "accentColorIndex",
+                    spec = "INTEGER",
                 )
             }
         }

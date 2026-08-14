@@ -16,4 +16,5 @@ data class Reminder(
     val activeHours: ActiveHours? = null,
     val reason: String? = null,
     val note: String? = null,
+    val accentColorIndex: Int? = null,
 )

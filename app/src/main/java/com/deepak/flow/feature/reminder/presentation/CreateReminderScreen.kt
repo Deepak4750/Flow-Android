@@ -4,11 +4,17 @@ import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
 import android.text.format.DateFormat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,16 +32,20 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepak.flow.R
 import com.deepak.flow.app.components.AnimatedReveal
+import com.deepak.flow.app.components.FlowAccentSwatch
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowChip
 import com.deepak.flow.app.components.FlowFieldHeading
@@ -49,8 +59,10 @@ import com.deepak.flow.app.components.FlowSelectorRow
 import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.components.FlowToggleRow
+import com.deepak.flow.app.theme.CategoryAccent
+import com.deepak.flow.app.theme.FlowMotion
+import com.deepak.flow.app.theme.FlowSizes
 import com.deepak.flow.app.theme.FlowSpacing
-import com.deepak.flow.app.theme.FlowSurfaceRaised
 import com.deepak.flow.core.model.Category
 import java.time.LocalDate
 import java.time.LocalTime
@@ -104,28 +116,13 @@ fun CreateReminderScreen(
     }
 
     val showStickySave = uiState.isEditMode && uiState.hasUnsavedChanges
+    var viewportBottom by remember { mutableIntStateOf(0) }
+    var inlineSaveTop by remember { mutableIntStateOf(Int.MAX_VALUE) }
+    val showFloatingSave = showStickySave && inlineSaveTop > viewportBottom
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        bottomBar = {
-            if (showStickySave) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(FlowSurfaceRaised)
-                        .imePadding()
-                        .padding(horizontal = FlowSpacing.screenHorizontal)
-                        .padding(top = FlowSpacing.sm, bottom = FlowSpacing.md),
-                ) {
-                    FlowButton(
-                        text = "Save changes",
-                        onClick = saveAction,
-                        enabled = uiState.canSave,
-                    )
-                }
-            }
-        },
     ) { padding ->
         if (uiState.isLoading) {
             Column(
@@ -140,20 +137,20 @@ fun CreateReminderScreen(
             return@Scaffold
         }
 
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .imePadding()
+                .onGloballyPositioned { coordinates ->
+                    viewportBottom = coordinates.boundsInWindow().bottom.toInt()
+                },
+        ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = FlowSpacing.screenHorizontal)
-                .then(
-                    if (showStickySave) {
-                        Modifier.padding(bottom = FlowSpacing.xxl)
-                    } else {
-                        Modifier
-                    },
-                ),
+                .padding(bottom = if (showStickySave) FlowSizes.fabClearance else FlowSpacing.xxl),
         ) {
             FlowScreenHeader(
                 title = if (uiState.isEditMode) "Edit reminder" else "New reminder",
@@ -185,6 +182,11 @@ fun CreateReminderScreen(
                         label = category.displayName,
                         selected = uiState.category == category,
                         onClick = { viewModel.updateCategory(category) },
+                        accent = CategoryAccent.forCategory(
+                            category = category,
+                            customName = uiState.customCategoryName,
+                            paletteIndex = uiState.accentColorIndex,
+                        ),
                     )
                 }
             }
@@ -196,6 +198,23 @@ fun CreateReminderScreen(
                         onValueChange = viewModel::updateCustomCategoryName,
                         placeholder = stringResource(R.string.placeholder_custom_category),
                     )
+                    Spacer(modifier = Modifier.height(FlowSpacing.sm))
+                    FlowSectionLabel("Accent")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CategoryAccent.Palette.forEachIndexed { index, color ->
+                            FlowAccentSwatch(
+                                color = color,
+                                selected = uiState.accentColorIndex == index,
+                                onClick = { viewModel.updateAccentColorIndex(index) },
+                                contentDescription = CategoryAccent.Names[index],
+                            )
+                        }
+                    }
                 }
             }
 
@@ -280,8 +299,41 @@ fun CreateReminderScreen(
                     onClick = saveAction,
                     enabled = uiState.canSave,
                 )
+            } else if (showStickySave) {
+                Spacer(modifier = Modifier.height(FlowSpacing.xl))
+                Box(
+                    modifier = Modifier.onGloballyPositioned { coordinates ->
+                        inlineSaveTop = coordinates.boundsInWindow().top.toInt()
+                    },
+                ) {
+                    FlowButton(
+                        text = "Save changes",
+                        onClick = saveAction,
+                        enabled = uiState.canSave,
+                    )
+                }
             }
-            Spacer(modifier = Modifier.height(FlowSpacing.xxl))
+        }
+
+            AnimatedVisibility(
+                visible = showFloatingSave,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .imePadding()
+                    .padding(horizontal = FlowSpacing.screenHorizontal)
+                    .padding(bottom = FlowSpacing.md),
+                enter = fadeIn(tween(FlowMotion.STANDARD)) +
+                    slideInVertically(tween(FlowMotion.STANDARD)) { it / 2 },
+                exit = fadeOut(tween(FlowMotion.FAST)) +
+                    slideOutVertically(tween(FlowMotion.FAST)) { it / 2 },
+            ) {
+                FlowButton(
+                    text = "Save changes",
+                    onClick = saveAction,
+                    enabled = uiState.canSave,
+                )
+            }
         }
     }
 }
