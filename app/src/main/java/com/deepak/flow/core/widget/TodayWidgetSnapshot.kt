@@ -1,0 +1,55 @@
+package com.deepak.flow.core.widget
+
+import com.deepak.flow.core.model.DailyProgress
+import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.scheduling.SchedulingEngine
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+data class TodayWidgetItem(
+    val id: Long,
+    val title: String,
+    val timeLabel: String,
+    val completed: Boolean,
+)
+
+data class TodayWidgetSnapshot(
+    val items: List<TodayWidgetItem>,
+    val extraCount: Int,
+    val progress: DailyProgress,
+)
+
+fun buildTodayWidgetSnapshot(
+    reminders: List<Reminder>,
+    completedIds: Set<Long>,
+    today: LocalDate,
+    zoneId: ZoneId,
+    timeFormatter: DateTimeFormatter,
+    visibleLimit: Int = 3,
+    engine: SchedulingEngine = SchedulingEngine(),
+): TodayWidgetSnapshot {
+    val scheduled = reminders
+        .filter { it.enabled && engine.isScheduledOnDate(it, today, zoneId) }
+        .sortedWith(
+            compareBy<Reminder> { it.id in completedIds }
+                .thenBy { it.reminderTimes.minOrNull() ?: LocalTime.MAX },
+        )
+    val items = scheduled.take(visibleLimit).map { reminder ->
+        TodayWidgetItem(
+            id = reminder.id,
+            title = reminder.title,
+            timeLabel = reminder.reminderTimes.joinToString(", ") { it.format(timeFormatter) },
+            completed = reminder.id in completedIds,
+        )
+    }
+    return TodayWidgetSnapshot(
+        items = items,
+        extraCount = (scheduled.size - visibleLimit).coerceAtLeast(0),
+        progress = DailyProgress(
+            totalTasks = scheduled.size,
+            completedTasks = scheduled.count { it.id in completedIds },
+        ),
+    )
+}

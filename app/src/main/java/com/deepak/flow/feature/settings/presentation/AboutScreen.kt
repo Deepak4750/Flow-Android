@@ -44,8 +44,6 @@ fun AboutScreen(
     val haptic = LocalHapticFeedback.current
     var versionTaps by remember { mutableIntStateOf(0) }
 
-    AppUpdatePrompt(updateViewModel)
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,

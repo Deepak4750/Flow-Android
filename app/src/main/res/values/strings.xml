@@ -85,4 +85,13 @@
     <string name="action_later">Later</string>
     <string name="update_preview_label">Preview updates</string>
     <string name="update_preview_supporting">You see new builds before anyone else.</string>
+
+    <!-- Widgets -->
+    <string name="widget_today_description">Today\'s reminders. Mark them complete from the home screen.</string>
+    <string name="widget_matrix_description">Today\'s progress as a square of dots.</string>
+    <string name="widget_today_label">Today</string>
+    <string name="widget_matrix_label">Progress</string>
+    <string name="widget_today_preview_title">Morning workout</string>
+    <string name="widget_today_preview_time">7:00 AM</string>
+    <string name="widget_matrix_preview_percent">40%</string>
 </resources>

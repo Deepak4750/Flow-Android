@@ -49,6 +49,7 @@ class FlowApplication : Application() {
             dao = database.reminderDao(),
             completionDao = database.reminderCompletionDao(),
             notificationScheduler = notificationScheduler,
+            onDataChanged = { com.deepak.flow.core.widget.FlowWidgets.refresh(this) },
         )
         profileRepository = ProfileRepositoryImpl(
             dao = database.userProfileDao(),

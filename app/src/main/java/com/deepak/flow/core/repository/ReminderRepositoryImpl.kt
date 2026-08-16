@@ -18,6 +18,7 @@ class ReminderRepositoryImpl(
     private val dao: ReminderDao,
     private val completionDao: ReminderCompletionDao,
     private val notificationScheduler: NotificationScheduler,
+    private val onDataChanged: () -> Unit = {},
     private val json: Json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -37,6 +38,7 @@ class ReminderRepositoryImpl(
         if (saved.enabled) {
             notificationScheduler.scheduleNextOccurrence(saved)
         }
+        onDataChanged()
         return id
     }
 
@@ -46,12 +48,14 @@ class ReminderRepositoryImpl(
         if (reminder.enabled) {
             notificationScheduler.scheduleNextOccurrence(reminder)
         }
+        onDataChanged()
     }
 
     override suspend fun deleteReminder(id: Long) {
         notificationScheduler.cancelReminder(id)
         completionDao.deleteForReminder(id)
         dao.deleteById(id)
+        onDataChanged()
     }
 
     override suspend fun deleteAllReminders() {
@@ -60,6 +64,7 @@ class ReminderRepositoryImpl(
         dao.getAllIds().forEach { notificationScheduler.cancelReminder(it) }
         completionDao.deleteAll()
         dao.deleteAll()
+        onDataChanged()
     }
 
     override suspend fun setReminderEnabled(id: Long, enabled: Boolean) {
@@ -71,6 +76,7 @@ class ReminderRepositoryImpl(
         } else {
             notificationScheduler.cancelReminder(id)
         }
+        onDataChanged()
     }
 
     override suspend fun rescheduleAllEnabledReminders() {
@@ -98,6 +104,7 @@ class ReminderRepositoryImpl(
         } else {
             completionDao.deleteForReminderOnDate(reminderId, dateEpochDay)
         }
+        onDataChanged()
     }
 }
 

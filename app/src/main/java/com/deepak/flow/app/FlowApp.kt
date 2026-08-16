@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
@@ -23,6 +24,7 @@ import com.deepak.flow.feature.onboarding.presentation.OnboardingViewModel
 import com.deepak.flow.feature.reminder.presentation.CreateReminderScreen
 import com.deepak.flow.feature.reminder.presentation.CreateReminderViewModel
 import com.deepak.flow.feature.settings.presentation.AboutScreen
+import com.deepak.flow.feature.settings.presentation.AppUpdatePrompt
 import com.deepak.flow.feature.settings.presentation.SettingsScreen
 import com.deepak.flow.feature.settings.presentation.SettingsViewModel
 
@@ -43,6 +45,11 @@ fun FlowApp(modifier: Modifier = Modifier) {
         } else {
             val navController = rememberNavController()
             val updateViewModel: AppUpdateViewModel = viewModel(factory = factory)
+            LifecycleResumeEffect(Unit) {
+                updateViewModel.onAppOpened()
+                onPauseOrDispose { }
+            }
+            AppUpdatePrompt(updateViewModel)
             NavHost(
                 navController = navController,
                 startDestination = FlowRoute.Home,
@@ -52,7 +59,6 @@ fun FlowApp(modifier: Modifier = Modifier) {
                     val viewModel: HomeViewModel = viewModel(factory = factory)
                     HomeScreen(
                         viewModel = viewModel,
-                        updateViewModel = updateViewModel,
                         onCreateReminder = { navController.navigate(FlowRoute.CreateReminder) },
                         onEditReminder = { id ->
                             navController.navigate(FlowRoute.EditReminder(reminderId = id))

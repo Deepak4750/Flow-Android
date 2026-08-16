@@ -23,6 +23,7 @@ class BootReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 app.reminderRepository.rescheduleAllEnabledReminders()
+                com.deepak.flow.core.widget.FlowWidgets.refresh(app)
             } finally {
                 pendingResult.finish()
             }

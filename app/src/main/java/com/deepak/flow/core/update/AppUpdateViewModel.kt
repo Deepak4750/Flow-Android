@@ -72,6 +72,7 @@ class AppUpdateViewModel(
 
     fun checkQuietly() {
         viewModelScope.launch {
+            if (_uiState.value.status == AppUpdateStatus.Downloading) return@launch
             val manifest = repository().fetchManifest().getOrNull() ?: return@launch
             if (!manifest.isNewerThan(BuildConfig.VERSION_CODE)) return@launch
             _uiState.update {
@@ -82,6 +83,10 @@ class AppUpdateViewModel(
                 )
             }
         }
+    }
+
+    fun onAppOpened() {
+        checkQuietly()
     }
 
     fun checkNow() {

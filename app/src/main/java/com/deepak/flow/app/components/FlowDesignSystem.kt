@@ -53,8 +53,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -274,6 +276,15 @@ fun FlowTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     minLines: Int = 1,
 ) {
+    val fieldStyle = MaterialTheme.typography.titleLarge.copy(
+        color = FlowTextPrimary,
+        lineHeight = MaterialTheme.typography.titleLarge.fontSize,
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+        lineHeightStyle = LineHeightStyle(
+            alignment = LineHeightStyle.Alignment.Center,
+            trim = LineHeightStyle.Trim.Both,
+        ),
+    )
     Column(modifier = modifier.fillMaxWidth()) {
         BasicTextField(
             value = value,
@@ -281,21 +292,22 @@ fun FlowTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = FlowSizes.touchTarget),
-            textStyle = MaterialTheme.typography.titleLarge.copy(color = FlowTextPrimary),
+            textStyle = fieldStyle,
             singleLine = singleLine,
             minLines = minLines,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             cursorBrush = SolidColor(FlowWhite),
             decorationBox = { inner ->
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = FlowSizes.touchTarget),
                     contentAlignment = Alignment.CenterStart,
                 ) {
                     if (value.isEmpty() && placeholder.isNotEmpty()) {
                         Text(
                             text = placeholder,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = FlowTextDisabled,
+                            style = fieldStyle.copy(color = FlowTextDisabled),
                         )
                     }
                     inner()

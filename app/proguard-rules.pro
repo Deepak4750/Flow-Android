@@ -51,3 +51,5 @@
 
 -keep class com.deepak.flow.core.update.** { *; }
 -keep,includedescriptorclasses class com.deepak.flow.core.update.**$$serializer { *; }
+
+-keep class com.deepak.flow.core.widget.** { *; }

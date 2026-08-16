@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.notification.NotificationChannelManager
+import com.deepak.flow.core.notification.reminderNotificationBody
 import com.deepak.flow.core.scheduling.SchedulingEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -93,7 +94,7 @@ class AlarmReceiver : BroadcastReceiver() {
         title: String,
         note: String?,
     ) {
-        val body = note?.takeIf { it.isNotBlank() } ?: "Time to show up."
+        val body = reminderNotificationBody(note)
         val snoozeEnabled = app.profileRepository.getProfile()?.snoozeEnabled == true
         val notification = NotificationChannelManager
             .buildReminderNotification(

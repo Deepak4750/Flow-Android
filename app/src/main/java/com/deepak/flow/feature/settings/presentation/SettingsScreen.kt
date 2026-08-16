@@ -74,8 +74,6 @@ fun SettingsScreen(
         )
     }
 
-    AppUpdatePrompt(updateViewModel)
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
