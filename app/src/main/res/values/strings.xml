@@ -78,7 +78,7 @@
     <string name="update_failed">Couldn\'t check right now.</string>
     <string name="update_available">Flow %1$s is ready.</string>
     <string name="update_title">A newer Flow is ready</string>
-    <string name="update_message">Version %1$s can be installed over this one. Your reminders stay.</string>
+    <string name="update_message">Version %1$s can be installed over this one.</string>
     <string name="update_downloading">Downloading the update…</string>
     <string name="update_needs_permission">Allow Flow to install updates, then come back.</string>
     <string name="action_install">Install</string>
