@@ -12,7 +12,9 @@ import com.deepak.flow.app.theme.CategoryAccent
 import com.deepak.flow.core.model.ActiveHours
 import com.deepak.flow.core.model.Category
 import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.model.SavedCustomCategory
 import com.deepak.flow.core.model.Schedule
+import com.deepak.flow.core.model.savedCustomCategories
 import com.deepak.flow.core.repository.ReminderRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +51,7 @@ data class CreateReminderUiState(
     val reason: String = "",
     val note: String = "",
     val accentColorIndex: Int = CategoryAccent.DefaultCustomIndex,
+    val savedCustomCategories: List<SavedCustomCategory> = emptyList(),
     val isSaving: Boolean = false,
     val isLoading: Boolean = false,
     val needsNotificationPermission: Boolean = false,
@@ -83,6 +86,10 @@ enum class ScheduleType(val displayName: String) {
     EVERY_X_HOURS("Every few hours"),
 }
 
+/** Clock time when create opens. Later minutes must not rewrite it. */
+fun defaultNewReminderTime(now: LocalTime = LocalTime.now()): LocalTime =
+    now.truncatedTo(ChronoUnit.MINUTES)
+
 class CreateReminderViewModel(
     application: Application,
     private val editReminderId: Long? = null,
@@ -95,6 +102,11 @@ class CreateReminderViewModel(
         CreateReminderUiState(
             isEditMode = editReminderId != null,
             editingReminderId = editReminderId,
+            reminderTime = if (editReminderId == null) {
+                defaultNewReminderTime()
+            } else {
+                LocalTime.of(19, 0)
+            },
         ),
     )
     val uiState: StateFlow<CreateReminderUiState> = _uiState.asStateFlow()
@@ -102,6 +114,13 @@ class CreateReminderViewModel(
     private var editBaseline: ReminderFormSnapshot? = null
 
     init {
+        viewModelScope.launch {
+            repository.observeReminders().collect { reminders ->
+                _uiState.update { current ->
+                    publish(current.copy(savedCustomCategories = reminders.savedCustomCategories()))
+                }
+            }
+        }
         editReminderId?.let { loadReminder(it) }
     }
 
@@ -149,12 +168,22 @@ class CreateReminderViewModel(
                 enabled = reminder.enabled,
             )
             editBaseline = ReminderFormSnapshot.from(loaded)
-            _uiState.value = publish(loaded.copy(isLoading = false))
+            _uiState.update { current ->
+                publish(
+                    loaded.copy(
+                        isLoading = false,
+                        savedCustomCategories = current.savedCustomCategories,
+                    ),
+                )
+            }
         }
     }
 
     fun updateTask(value: String) = updateState { it.copy(task = value) }
     fun updateCategory(value: Category) = updateState { it.copy(category = value) }
+    fun selectSavedCustomCategory(name: String, accentColorIndex: Int?) = updateState {
+        it.selectingSavedCustom(name, accentColorIndex)
+    }
     fun updateCustomCategoryName(value: String) = updateState { it.copy(customCategoryName = value) }
     fun updateAccentColorIndex(index: Int) = updateState {
         it.copy(accentColorIndex = index.coerceIn(0, CategoryAccent.Palette.lastIndex))
@@ -356,6 +385,16 @@ class CreateReminderViewModel(
         const val INTERVAL_HOURS_MAX = 168
     }
 }
+
+internal fun CreateReminderUiState.selectingSavedCustom(
+    name: String,
+    accentColorIndex: Int?,
+): CreateReminderUiState = copy(
+    category = Category.CUSTOM,
+    customCategoryName = name,
+    accentColorIndex = (accentColorIndex ?: CategoryAccent.stableIndex(name))
+        .coerceIn(0, CategoryAccent.Palette.lastIndex),
+)
 
 private fun Schedule.toScheduleType(): ScheduleType = when (this) {
     Schedule.Daily -> ScheduleType.DAILY

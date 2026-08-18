@@ -1,17 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ImageView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/widget_background"
-    android:gravity="center"
-    android:orientation="vertical"
-    android:padding="12dp">
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/widget_matrix_preview_percent"
-        android:textColor="@color/widget_text_primary"
-        android:textSize="13sp"
-        android:textStyle="bold" />
-</LinearLayout>
+    android:background="@drawable/widget_surface"
+    android:contentDescription="@string/widget_matrix_label"
+    android:padding="6dp"
+    android:scaleType="fitCenter" />

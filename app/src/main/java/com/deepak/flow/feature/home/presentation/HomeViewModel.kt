@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.model.DailyProgress
 import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ReminderRepository
 import com.deepak.flow.core.scheduling.SchedulingEngine
@@ -100,6 +101,8 @@ class HomeViewModel(
 
     fun deleteReminder(id: Long) {
         viewModelScope.launch {
+            val app = getApplication<FlowApplication>()
+            NotificationChannelManager.cancelReminderNotification(app, id)
             repository.deleteReminder(id)
         }
     }
@@ -117,6 +120,11 @@ class HomeViewModel(
                 dateEpochDay = LocalDate.now(zoneId).toEpochDay(),
                 completed = completed,
             )
+            if (completed) {
+                val app = getApplication<FlowApplication>()
+                app.notificationScheduler.cancelSnooze(reminderId)
+                NotificationChannelManager.cancelReminderNotification(app, reminderId)
+            }
         }
     }
 }

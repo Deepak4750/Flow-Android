@@ -3,6 +3,7 @@ package com.deepak.flow.core.widget
 import com.deepak.flow.core.model.DailyProgress
 import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.scheduling.SchedulingEngine
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -13,6 +14,7 @@ data class TodayWidgetItem(
     val title: String,
     val timeLabel: String,
     val completed: Boolean,
+    val isNext: Boolean = false,
 )
 
 data class TodayWidgetSnapshot(
@@ -21,14 +23,28 @@ data class TodayWidgetSnapshot(
     val progress: DailyProgress,
 )
 
+fun nextUpReminderId(
+    reminders: List<Reminder>,
+    now: Instant,
+    zoneId: ZoneId,
+    engine: SchedulingEngine = SchedulingEngine(),
+): Long? = reminders
+    .filter { it.enabled }
+    .mapNotNull { reminder ->
+        engine.calculateNextOccurrence(reminder, now, zoneId)?.let { reminder.id to it }
+    }
+    .minByOrNull { it.second }
+    ?.first
+
 fun buildTodayWidgetSnapshot(
     reminders: List<Reminder>,
     completedIds: Set<Long>,
     today: LocalDate,
     zoneId: ZoneId,
     timeFormatter: DateTimeFormatter,
-    visibleLimit: Int = 3,
+    visibleLimit: Int = Int.MAX_VALUE,
     engine: SchedulingEngine = SchedulingEngine(),
+    now: Instant = Instant.now(),
 ): TodayWidgetSnapshot {
     val scheduled = reminders
         .filter { it.enabled && engine.isScheduledOnDate(it, today, zoneId) }
@@ -36,12 +52,14 @@ fun buildTodayWidgetSnapshot(
             compareBy<Reminder> { it.id in completedIds }
                 .thenBy { it.reminderTimes.minOrNull() ?: LocalTime.MAX },
         )
+    val nextId = nextUpReminderId(reminders, now, zoneId, engine)
     val items = scheduled.take(visibleLimit).map { reminder ->
         TodayWidgetItem(
             id = reminder.id,
             title = reminder.title,
             timeLabel = reminder.reminderTimes.joinToString(", ") { it.format(timeFormatter) },
             completed = reminder.id in completedIds,
+            isNext = reminder.id == nextId,
         )
     }
     return TodayWidgetSnapshot(

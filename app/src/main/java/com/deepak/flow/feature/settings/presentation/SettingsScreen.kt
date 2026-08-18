@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.deepak.flow.BuildConfig
 import com.deepak.flow.R
 import com.deepak.flow.app.components.AnimatedReveal
 import com.deepak.flow.app.components.FlowButton
@@ -40,6 +41,7 @@ import com.deepak.flow.app.components.FlowToggleRow
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.update.AppUpdateViewModel
+import com.deepak.flow.core.update.formatInstalledVersionLabel
 
 @Composable
 fun SettingsScreen(
@@ -49,6 +51,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val updateState by updateViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var confirmDeleteAll by remember { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(true) }
@@ -187,6 +190,14 @@ fun SettingsScreen(
                 label = stringResource(R.string.settings_section_app),
                 supporting = stringResource(R.string.settings_app_supporting),
             )
+            FlowInfoRow(
+                label = stringResource(R.string.about_label_version),
+                value = formatInstalledVersionLabel(
+                    versionName = BuildConfig.VERSION_NAME,
+                    previewEnabled = updateState.previewEnabled,
+                ),
+            )
+            Spacer(modifier = Modifier.height(FlowSpacing.xs))
             AppUpdateCheckRow(updateViewModel)
             Spacer(modifier = Modifier.height(FlowSpacing.xxl))
         }

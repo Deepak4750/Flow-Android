@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,10 +54,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -276,44 +275,36 @@ fun FlowTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     minLines: Int = 1,
 ) {
-    val fieldStyle = MaterialTheme.typography.titleLarge.copy(
-        color = FlowTextPrimary,
-        lineHeight = MaterialTheme.typography.titleLarge.fontSize,
-        platformStyle = PlatformTextStyle(includeFontPadding = false),
-        lineHeightStyle = LineHeightStyle(
-            alignment = LineHeightStyle.Alignment.Center,
-            trim = LineHeightStyle.Trim.Both,
-        ),
-    )
+    val fieldStyle = MaterialTheme.typography.titleLarge.copy(color = FlowTextPrimary)
     Column(modifier = modifier.fillMaxWidth()) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = FlowSizes.touchTarget),
-            textStyle = fieldStyle,
-            singleLine = singleLine,
-            minLines = minLines,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            cursorBrush = SolidColor(FlowWhite),
-            decorationBox = { inner ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = FlowSizes.touchTarget),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (value.isEmpty() && placeholder.isNotEmpty()) {
-                        Text(
-                            text = placeholder,
-                            style = fieldStyle.copy(color = FlowTextDisabled),
-                        )
+                .heightIn(min = FlowSizes.touchTarget),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = fieldStyle,
+                singleLine = singleLine,
+                minLines = minLines,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                cursorBrush = SolidColor(FlowWhite),
+                decorationBox = { inner ->
+                    Box {
+                        if (value.isEmpty() && placeholder.isNotEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = fieldStyle.copy(color = FlowTextDisabled),
+                            )
+                        }
+                        inner()
                     }
-                    inner()
-                }
-            },
-        )
+                },
+            )
+        }
         FlowHairlineDivider()
     }
 }

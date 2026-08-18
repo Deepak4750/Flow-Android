@@ -69,6 +69,7 @@ import com.deepak.flow.core.model.Category
 import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.model.Schedule
 import com.deepak.flow.core.model.categoryLabel
+import com.deepak.flow.core.model.savedCustomCategories
 import com.deepak.flow.core.scheduling.SchedulingEngine
 import com.deepak.flow.feature.reminder.presentation.flowTimeFormatter
 import kotlinx.coroutines.launch
@@ -156,25 +157,14 @@ private fun HomeContent(
     var categoryFilter by remember { mutableStateOf<HomeCategoryFilter>(HomeCategoryFilter.All) }
     val schedulingEngine = remember { SchedulingEngine() }
     val today = remember(zoneId) { LocalDate.now(zoneId) }
-    val customCategoryNames = remember(uiState.reminders) {
-        uiState.reminders
-            .filter { it.category == Category.CUSTOM }
-            .mapNotNull { reminder ->
-                reminder.customCategoryName?.trim()?.takeIf { it.isNotEmpty() }
-            }
-            .distinct()
-            .sorted()
+    val savedCustomCategories = remember(uiState.reminders) {
+        uiState.reminders.savedCustomCategories()
     }
-    val customAccentByName = remember(uiState.reminders) {
-        uiState.reminders
-            .filter { it.category == Category.CUSTOM }
-            .mapNotNull { reminder ->
-                val name = reminder.customCategoryName?.trim()?.takeIf { it.isNotEmpty() }
-                    ?: return@mapNotNull null
-                name to reminder.accentColorIndex
-            }
-            .distinctBy { it.first }
-            .toMap()
+    val customCategoryNames = remember(savedCustomCategories) {
+        savedCustomCategories.map { it.name }
+    }
+    val customAccentByName = remember(savedCustomCategories) {
+        savedCustomCategories.associate { it.name to it.accentColorIndex }
     }
     val filteredReminders = remember(uiState.reminders, categoryFilter) {
         when (val filter = categoryFilter) {

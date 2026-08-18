@@ -54,5 +54,6 @@ class FlowApplication : Application() {
         profileRepository = ProfileRepositoryImpl(
             dao = database.userProfileDao(),
         )
+        com.deepak.flow.core.widget.FlowWidgets.refresh(this)
     }
 }

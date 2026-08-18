@@ -4,6 +4,8 @@ import com.deepak.flow.core.model.Category
 import com.deepak.flow.core.model.Reminder
 import com.deepak.flow.core.model.Schedule
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalTime
@@ -49,6 +51,22 @@ class TodayWidgetSnapshotTest {
     }
 
     @Test
+    fun allScheduledItems_areIncludedByDefault() {
+        val reminders = (1L..7L).map { id ->
+            reminder(id, "Task $id", LocalTime.of(id.toInt(), 0))
+        }
+        val snapshot = buildTodayWidgetSnapshot(
+            reminders = reminders,
+            completedIds = emptySet(),
+            today = today,
+            zoneId = zone,
+            timeFormatter = formatter,
+        )
+        assertEquals(7, snapshot.items.size)
+        assertEquals(0, snapshot.extraCount)
+    }
+
+    @Test
     fun extraCount_whenOverVisibleLimit() {
         val reminders = (1L..7L).map { id ->
             reminder(id, "Task $id", LocalTime.of(id.toInt(), 0))
@@ -63,6 +81,24 @@ class TodayWidgetSnapshotTest {
         )
         assertEquals(3, snapshot.items.size)
         assertEquals(4, snapshot.extraCount)
+    }
+
+    @Test
+    fun nextUpItem_isTheSoonestRemainingOccurrence() {
+        val snapshot = buildTodayWidgetSnapshot(
+            reminders = listOf(
+                reminder(1, "Done", LocalTime.of(7, 0)),
+                reminder(2, "Later", LocalTime.of(19, 0)),
+            ),
+            completedIds = setOf(1L),
+            today = today,
+            zoneId = zone,
+            timeFormatter = formatter,
+            now = today.atTime(10, 0).atZone(zone).toInstant(),
+        )
+        assertEquals(listOf("Later", "Done"), snapshot.items.map { it.title })
+        assertTrue(snapshot.items.first { it.title == "Later" }.isNext)
+        assertFalse(snapshot.items.first { it.title == "Done" }.isNext)
     }
 
     @Test

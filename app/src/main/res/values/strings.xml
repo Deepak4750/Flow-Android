@@ -87,11 +87,21 @@
     <string name="update_preview_supporting">You see new builds before anyone else.</string>
 
     <!-- Widgets -->
-    <string name="widget_today_description">Today\'s reminders. Mark them complete from the home screen.</string>
-    <string name="widget_matrix_description">Today\'s progress as a square of dots.</string>
+    <string name="widget_today_description">Today\'s reminders. Scroll the list, mark them complete, or tap to open Flow.</string>
+    <string name="widget_matrix_description">Today\'s progress as a square of dots. Swipe to see the percentage. Tap to open Flow.</string>
     <string name="widget_today_label">Today</string>
     <string name="widget_matrix_label">Progress</string>
     <string name="widget_today_preview_title">Morning workout</string>
     <string name="widget_today_preview_time">7:00 AM</string>
+    <string name="widget_today_preview_title_2">Read 10 pages</string>
+    <string name="widget_today_preview_time_2">9:30 PM</string>
+    <string name="widget_today_preview_count">1 of 3</string>
     <string name="widget_matrix_preview_percent">40%</string>
+    <string name="widget_matrix_zero">0%</string>
+    <string name="widget_today_empty">Nothing scheduled today.</string>
+    <string name="widget_today_empty_hint">Tap to open Flow.</string>
+    <string name="widget_today_count">%1$d of %2$d</string>
+    <string name="widget_mark_complete">Mark complete</string>
+    <string name="widget_marked_complete">Completed</string>
+    <string name="widget_next_time">Next, %1$s</string>
 </resources>

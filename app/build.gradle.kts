@@ -15,8 +15,8 @@ android {
         targetSdk = 37
         // Sideloaded APKs only update in place — and keep reminders — when this
         // number is higher than the installed build. Bump it for every APK you share.
-        versionCode = 8
-        versionName = "1.0.5"
+        versionCode = 25
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -81,8 +81,6 @@ dependencies {
     ksp(libs.androidx.room.compiler)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.androidx.glance.appwidget)
-    implementation(libs.androidx.glance.material3)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="flow_background">#FF0F0F10</color>
-    <color name="widget_background">#FF0A0A0A</color>
+    <color name="widget_background">#FF000000</color>
     <color name="widget_text_primary">#FFFFFFFF</color>
     <color name="widget_text_secondary">#FFC8C8C8</color>
     <color name="widget_text_tertiary">#FFADADAD</color>
+    <color name="widget_dot_off">#FF333333</color>
+    <color name="widget_accent">#FF4FC3F7</color>
     <color name="flow_primary">#FF9B8AFB</color>
     <color name="flow_wave_cyan">#FF4FC3F7</color>
     <color name="ic_launcher_background">#FF0A0E14</color>

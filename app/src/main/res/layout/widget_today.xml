@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_today_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_surface"
+    android:orientation="vertical"
+    android:paddingStart="10dp"
+    android:paddingTop="16dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="6dp">
+
+        <TextView
+            android:id="@+id/widget_today_heading"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:letterSpacing="0.14"
+            android:text="@string/widget_today_label"
+            android:textAllCaps="true"
+            android:textColor="@color/widget_text_tertiary"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_today_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:textColor="@color/widget_text_tertiary"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <ListView
+        android:id="@+id/widget_today_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="10dp"
+        android:layout_weight="1"
+        android:divider="@null"
+        android:dividerHeight="0dp"
+        android:scrollbars="none" />
+
+    <LinearLayout
+        android:id="@+id/widget_today_empty_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        android:paddingStart="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_today_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/widget_today_empty"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/widget_today_empty_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/widget_today_empty_hint"
+            android:textColor="@color/widget_text_tertiary"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

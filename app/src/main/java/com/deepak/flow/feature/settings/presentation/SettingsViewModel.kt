@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.model.SnoozeSettings
+import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ReminderRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -101,6 +102,7 @@ class SettingsViewModel(
 
     fun deleteAllReminders() {
         viewModelScope.launch {
+            NotificationChannelManager.cancelAllReminderNotifications(getApplication())
             reminderRepository.deleteAllReminders()
         }
     }

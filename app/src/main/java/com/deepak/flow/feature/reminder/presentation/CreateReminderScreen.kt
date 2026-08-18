@@ -196,24 +196,50 @@ fun CreateReminderScreen(
             FlowSectionBreak()
             FlowScreenHeading("Category")
             Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            val trimmedCustomName = uiState.customCategoryName.trim()
+            val savedCustomSelected = uiState.category == Category.CUSTOM &&
+                uiState.savedCustomCategories.any { it.name == trimmedCustomName }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
             ) {
-                Category.entries.forEach { category ->
+                Category.entries
+                    .filter { it != Category.CUSTOM }
+                    .forEach { category ->
+                        FlowChip(
+                            label = category.displayName,
+                            selected = uiState.category == category,
+                            onClick = { viewModel.updateCategory(category) },
+                            accent = CategoryAccent.forCategory(category),
+                        )
+                    }
+                uiState.savedCustomCategories.forEach { saved ->
                     FlowChip(
-                        label = category.displayName,
-                        selected = uiState.category == category,
-                        onClick = { viewModel.updateCategory(category) },
+                        label = saved.name,
+                        selected = uiState.category == Category.CUSTOM &&
+                            trimmedCustomName == saved.name,
+                        onClick = {
+                            viewModel.selectSavedCustomCategory(saved.name, saved.accentColorIndex)
+                        },
                         accent = CategoryAccent.forCategory(
-                            category = category,
-                            customName = uiState.customCategoryName,
-                            paletteIndex = uiState.accentColorIndex,
+                            category = Category.CUSTOM,
+                            customName = saved.name,
+                            paletteIndex = saved.accentColorIndex,
                         ),
                     )
                 }
+                FlowChip(
+                    label = Category.CUSTOM.displayName,
+                    selected = uiState.category == Category.CUSTOM && !savedCustomSelected,
+                    onClick = { viewModel.updateCategory(Category.CUSTOM) },
+                    accent = CategoryAccent.forCategory(
+                        category = Category.CUSTOM,
+                        customName = uiState.customCategoryName,
+                        paletteIndex = uiState.accentColorIndex,
+                    ),
+                )
             }
             AnimatedReveal(visible = uiState.category == Category.CUSTOM) {
                 Column {

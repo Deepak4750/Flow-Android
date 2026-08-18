@@ -12,6 +12,12 @@ internal object NotificationCancelGuard {
         armedIds.add(reminderId)
     }
 
+    /** True when Flow cancelled this reminder itself, so swipe must not restore. */
     @Synchronized
     fun consume(reminderId: Long): Boolean = armedIds.remove(reminderId)
+
+    @Synchronized
+    fun resetForTests() {
+        armedIds.clear()
+    }
 }

@@ -3,7 +3,6 @@ package com.deepak.flow.core.notification.receiver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.app.NotificationManagerCompat
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.notification.reminderNotificationBody
@@ -11,8 +10,10 @@ import com.deepak.flow.core.scheduling.SchedulingEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 
 class AlarmReceiver : BroadcastReceiver() {
@@ -24,6 +25,7 @@ class AlarmReceiver : BroadcastReceiver() {
         if (reminderId < 0) return
         if (!isSnooze && scheduledTimeMillis < 0) return
 
+        NotificationChannelManager.createChannel(context)
         val pendingResult = goAsync()
         val app = context.applicationContext as FlowApplication
 
@@ -52,6 +54,13 @@ class AlarmReceiver : BroadcastReceiver() {
     ) {
         val reminder = app.reminderRepository.getReminder(reminderId) ?: return
         if (!reminder.enabled) return
+
+        val today = LocalDate.now(ZoneId.systemDefault()).toEpochDay()
+        val completedToday = app.reminderRepository.observeTodayCompletions(today).first()
+        if (reminderId in completedToday) {
+            app.notificationScheduler.cancelSnooze(reminderId)
+            return
+        }
 
         showNotification(context, app, reminderId, reminder.title, reminder.note)
         app.notificationScheduler.cancelSnooze(reminderId)
@@ -96,17 +105,13 @@ class AlarmReceiver : BroadcastReceiver() {
     ) {
         val body = reminderNotificationBody(note)
         val snoozeEnabled = app.profileRepository.getProfile()?.snoozeEnabled == true
-        val notification = NotificationChannelManager
-            .buildReminderNotification(
-                context = context,
-                reminderId = reminderId,
-                title = title,
-                body = body,
-                snoozeEnabled = snoozeEnabled,
-            )
-            .build()
-
-        NotificationManagerCompat.from(context).notify(reminderId.toInt(), notification)
+        NotificationChannelManager.postReminderNotification(
+            context = context,
+            reminderId = reminderId,
+            title = title,
+            body = body,
+            snoozeEnabled = snoozeEnabled,
+        )
     }
 
     companion object {

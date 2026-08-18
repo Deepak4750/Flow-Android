@@ -43,6 +43,7 @@ class NotificationScheduler(
     }
 
     fun cancelReminder(reminderId: Long) {
+        cancelSnooze(reminderId)
         val intent = Intent(context, AlarmReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
             context,

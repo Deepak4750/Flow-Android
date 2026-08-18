@@ -86,5 +86,15 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/progress_matrix_widget_info" />
         </receiver>
+
+        <service
+            android:name=".core.widget.TodayTasksRemoteViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <service
+            android:name=".core.widget.ProgressMatrixRemoteViewsService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
     </application>
 </manifest>

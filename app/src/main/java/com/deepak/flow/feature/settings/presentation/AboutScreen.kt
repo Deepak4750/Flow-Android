@@ -31,6 +31,7 @@ import com.deepak.flow.app.components.FlowSupportingText
 import com.deepak.flow.app.components.FlowToggleRow
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.core.update.AppUpdateViewModel
+import com.deepak.flow.core.update.formatInstalledVersionLabel
 
 private const val PreviewUnlockTaps = 7
 
@@ -68,7 +69,10 @@ fun AboutScreen(
             FlowSectionBreak()
             FlowInfoRow(
                 label = stringResource(R.string.about_label_version),
-                value = BuildConfig.VERSION_NAME,
+                value = formatInstalledVersionLabel(
+                    versionName = BuildConfig.VERSION_NAME,
+                    previewEnabled = updateState.previewEnabled,
+                ),
                 onClick = {
                     if (updateState.previewUnlocked) return@FlowInfoRow
                     val taps = versionTaps + 1

@@ -8,6 +8,10 @@ import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.notification.NotificationCancelGuard
 import com.deepak.flow.core.notification.NotificationChannelManager
+import com.deepak.flow.core.notification.ReminderNotificationActionPlan
+import com.deepak.flow.core.notification.ReminderNotificationIntents
+import com.deepak.flow.core.notification.planForReminderNotificationAction
+import com.deepak.flow.core.notification.reminderNotificationId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,77 +25,75 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val reminderId = intent.getLongExtra(EXTRA_REMINDER_ID, -1L)
         if (reminderId < 0) return
 
+        if (intent.action == ACTION_RESTORE) {
+            restoreAfterSwipe(context, intent, reminderId)
+            return
+        }
+
+        val plan = planForReminderNotificationAction(intent.action) ?: return
         val pendingResult = goAsync()
         val app = context.applicationContext as FlowApplication
 
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                when (intent.action) {
-                    ACTION_COMPLETE -> handleComplete(context, app, reminderId)
-                    ACTION_SNOOZE -> handleSnooze(context, app, reminderId)
-                    ACTION_DISMISS -> handleDismiss(context, reminderId)
-                    ACTION_RESTORE -> handleRestore(context, intent, reminderId)
-                }
+                execute(context, app, reminderId, plan)
             } finally {
                 pendingResult.finish()
             }
         }
     }
 
-    private suspend fun handleComplete(
+    private suspend fun execute(
         context: Context,
         app: FlowApplication,
         reminderId: Long,
+        plan: ReminderNotificationActionPlan,
     ) {
-        val reminder = app.reminderRepository.getReminder(reminderId) ?: return
-        val today = LocalDate.now(ZoneId.systemDefault()).toEpochDay()
-        app.reminderRepository.setTodayCompletion(
-            reminderId = reminderId,
-            dateEpochDay = today,
-            completed = true,
-        )
-        NotificationChannelManager.cancelReminderNotification(context, reminderId)
-    }
-
-    private suspend fun handleSnooze(
-        context: Context,
-        app: FlowApplication,
-        reminderId: Long,
-    ) {
-        val reminder = app.reminderRepository.getReminder(reminderId) ?: return
-        if (!reminder.enabled) return
-
-        val profile = app.profileRepository.getProfile()
-        if (profile?.snoozeEnabled != true) return
-
-        val snoozeMinutes = profile.snoozeIntervalMinutes
-
-        app.notificationScheduler.scheduleSnooze(
-            reminderId = reminderId,
-            snoozeMinutes = SnoozeSettings.coerceIntervalMinutes(snoozeMinutes),
-        )
-        NotificationChannelManager.cancelReminderNotification(context, reminderId)
-    }
-
-    private fun handleDismiss(context: Context, reminderId: Long) {
-        NotificationChannelManager.cancelReminderNotification(context, reminderId)
-    }
-
-    private fun handleRestore(context: Context, intent: Intent, reminderId: Long) {
-        if (NotificationCancelGuard.consume(reminderId)) return
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: return
-        val body = intent.getStringExtra(EXTRA_BODY)
-        val snoozeEnabled = intent.getBooleanExtra(EXTRA_SNOOZE_ENABLED, false)
-        val notification = NotificationChannelManager
-            .buildReminderNotification(
-                context = context,
-                reminderId = reminderId,
-                title = title,
-                body = body,
-                snoozeEnabled = snoozeEnabled,
+        if (plan.markCompleted) {
+            val reminder = app.reminderRepository.getReminder(reminderId) ?: return
+            val today = LocalDate.now(ZoneId.systemDefault()).toEpochDay()
+            app.reminderRepository.setTodayCompletion(
+                reminderId = reminder.id,
+                dateEpochDay = today,
+                completed = true,
             )
-            .build()
-        NotificationManagerCompat.from(context).notify(reminderId.toInt(), notification)
+        }
+        if (plan.scheduleSnooze) {
+            val reminder = app.reminderRepository.getReminder(reminderId) ?: return
+            if (!reminder.enabled) return
+
+            val profile = app.profileRepository.getProfile()
+            if (profile?.snoozeEnabled != true) return
+
+            app.notificationScheduler.scheduleSnooze(
+                reminderId = reminderId,
+                snoozeMinutes = SnoozeSettings.coerceIntervalMinutes(profile.snoozeIntervalMinutes),
+            )
+        }
+        if (plan.cancelPendingSnooze) {
+            app.notificationScheduler.cancelSnooze(reminderId)
+        }
+        if (plan.cancelNotification) {
+            NotificationChannelManager.cancelReminderNotification(context, reminderId)
+        }
+    }
+
+    private fun restoreAfterSwipe(context: Context, intent: Intent, reminderId: Long) {
+        if (NotificationCancelGuard.consume(reminderId)) return
+        val title = intent.getStringExtra(EXTRA_TITLE)?.trim().orEmpty()
+        if (title.isEmpty()) return
+        val notification = NotificationChannelManager.buildReminderNotification(
+            context = context,
+            reminderId = reminderId,
+            title = title,
+            body = intent.getStringExtra(EXTRA_BODY),
+            snoozeEnabled = intent.getBooleanExtra(EXTRA_SNOOZE_ENABLED, false),
+        ).build()
+        try {
+            NotificationManagerCompat.from(context)
+                .notify(reminderNotificationId(reminderId), notification)
+        } catch (_: SecurityException) {
+        }
     }
 
     companion object {
@@ -99,9 +101,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
         const val EXTRA_TITLE = "extra_action_title"
         const val EXTRA_BODY = "extra_action_body"
         const val EXTRA_SNOOZE_ENABLED = "extra_action_snooze_enabled"
-        const val ACTION_COMPLETE = "com.deepak.flow.action.COMPLETE"
-        const val ACTION_SNOOZE = "com.deepak.flow.action.SNOOZE"
-        const val ACTION_DISMISS = "com.deepak.flow.action.DISMISS"
-        const val ACTION_RESTORE = "com.deepak.flow.action.RESTORE"
+        const val ACTION_COMPLETE = ReminderNotificationIntents.ACTION_COMPLETE
+        const val ACTION_SNOOZE = ReminderNotificationIntents.ACTION_SNOOZE
+        const val ACTION_DISMISS = ReminderNotificationIntents.ACTION_DISMISS
+        const val ACTION_RESTORE = ReminderNotificationIntents.ACTION_RESTORE
     }
 }
