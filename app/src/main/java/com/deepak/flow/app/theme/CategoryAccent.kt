@@ -4,8 +4,8 @@ import androidx.compose.ui.graphics.Color
 import com.deepak.flow.core.model.Category
 
 /**
- * Quiet, prefixed accents for categories. They stay at 6dp dots — never
- * fill cards or chips — so Flow remains monochrome with one small colour cue.
+ * Quiet, prefixed accents for categories. They stay at 6dp dots - never
+ * fill cards or chips - so Flow remains monochrome with one small colour cue.
  */
 object CategoryAccent {
     val Palette: List<Color> = listOf(

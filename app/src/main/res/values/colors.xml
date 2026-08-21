@@ -5,6 +5,7 @@
     <color name="widget_text_primary">#FFFFFFFF</color>
     <color name="widget_text_secondary">#FFC8C8C8</color>
     <color name="widget_text_tertiary">#FFADADAD</color>
+    <color name="widget_text_disabled">#FF7A7A7A</color>
     <color name="widget_dot_off">#FF333333</color>
     <color name="widget_accent">#FF4FC3F7</color>
     <color name="flow_primary">#FF9B8AFB</color>

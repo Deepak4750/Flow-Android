@@ -178,7 +178,7 @@ fun CreateReminderScreen(
                 .padding(bottom = if (showStickySave) FlowSizes.fabClearance else FlowSpacing.xxl),
         ) {
             FlowScreenHeader(
-                title = if (uiState.isEditMode) "Edit reminder" else "New reminder",
+                title = if (uiState.isEditMode) "Edit task" else "New task",
                 onBack = requestBack,
             )
             Spacer(modifier = Modifier.height(FlowSpacing.lg))
@@ -346,7 +346,7 @@ fun CreateReminderScreen(
             if (!uiState.isEditMode) {
                 Spacer(modifier = Modifier.height(FlowSpacing.xl))
                 FlowButton(
-                    text = "Create reminder",
+                    text = "Create task",
                     onClick = saveAction,
                     enabled = uiState.canSave,
                 )
@@ -398,7 +398,7 @@ private fun AdvancedSection(
         if (!uiState.isIntervalSchedule) {
             FlowFieldHeading(
                 label = "Start date",
-                supporting = "When this reminder becomes active",
+                supporting = "When this task becomes active",
             )
             FlowSelectorRow(
                 label = "From",
@@ -440,7 +440,7 @@ private fun AdvancedSection(
         FlowSectionBreak()
         FlowFieldHeading(
             label = "Why",
-            supporting = "Optional — what matters about this for you?",
+            supporting = "Optional. What matters about this for you?",
         )
         FlowTextField(
             value = uiState.reason,

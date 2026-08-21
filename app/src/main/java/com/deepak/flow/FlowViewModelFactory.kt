@@ -18,6 +18,8 @@ class FlowViewModelFactory(
                 com.deepak.flow.feature.onboarding.presentation.OnboardingViewModel(application) as T
             modelClass.isAssignableFrom(com.deepak.flow.feature.settings.presentation.SettingsViewModel::class.java) ->
                 com.deepak.flow.feature.settings.presentation.SettingsViewModel(application) as T
+            modelClass.isAssignableFrom(com.deepak.flow.app.navigation.FeatureSettingsViewModel::class.java) ->
+                com.deepak.flow.app.navigation.FeatureSettingsViewModel(application) as T
             modelClass.isAssignableFrom(com.deepak.flow.core.update.AppUpdateViewModel::class.java) ->
                 com.deepak.flow.core.update.AppUpdateViewModel(application) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")

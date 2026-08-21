@@ -21,6 +21,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.Flow">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -85,6 +86,18 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/progress_matrix_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".core.widget.WaterWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_water_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/water_widget_info" />
         </receiver>
 
         <service

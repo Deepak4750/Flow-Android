@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
@@ -83,7 +84,7 @@ import com.deepak.flow.app.theme.FlowTextTertiary
 import com.deepak.flow.app.theme.FlowWhite
 
 /**
- * Section header for a block of content. Uppercase mono at 9.4:1 contrast —
+ * Section header for a block of content. Uppercase mono at 9.4:1 contrast - 
  * bright enough to read as a real label, not decoration.
  *
  * No heading semantics: this is also the label inside selector and info rows,
@@ -103,7 +104,7 @@ fun FlowSectionLabel(
 }
 
 /**
- * Primary section heading on form screens and list blocks: Task, When, All reminders.
+ * Primary section heading on form screens and list blocks: Task, When, All tasks.
  * Bright white and bold so it reads immediately against the black background.
  */
 @Composable
@@ -120,7 +121,7 @@ fun FlowScreenHeading(
 }
 
 /**
- * Label on the left, tappable value on the right — one row, no stacked labels.
+ * Label on the left, tappable value on the right - one row, no stacked labels.
  * Used for Repeats + schedule type, and similar inline pickers.
  */
 @Composable
@@ -148,7 +149,7 @@ fun FlowInlinePickerRow(
     }
 }
 
-/** A single reminder in a hairline box — separated from its neighbours. */
+/** A single task in a hairline box - separated from its neighbours. */
 @Composable
 fun FlowReminderCard(
     modifier: Modifier = Modifier,
@@ -169,7 +170,7 @@ fun FlowReminderCard(
 
 /**
  * The opening statement of a screen: the greeting on Home, the tagline on About.
- * One style, one colour, real heading semantics — so every screen announces and
+ * One style, one colour, real heading semantics - so every screen announces and
  * reads the same way.
  */
 @Composable
@@ -239,7 +240,7 @@ fun FlowSectionBreak() {
 }
 
 /**
- * Compact inline metadata — one step smaller than [FlowSectionLabel].
+ * Compact inline metadata - one step smaller than [FlowSectionLabel].
  * Use for tags and supporting detail inside a row, never to title a section.
  */
 @Composable
@@ -271,36 +272,50 @@ fun FlowTextField(
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "",
+    suffix: String = "",
     singleLine: Boolean = true,
     keyboardType: KeyboardType = KeyboardType.Text,
     minLines: Int = 1,
 ) {
     val fieldStyle = MaterialTheme.typography.titleLarge.copy(color = FlowTextPrimary)
     Column(modifier = modifier.fillMaxWidth()) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = FlowSizes.touchTarget),
-            contentAlignment = Alignment.CenterStart,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = if (suffix.isEmpty()) {
+                    Modifier.fillMaxWidth()
+                } else {
+                    Modifier.width(IntrinsicSize.Min)
+                },
                 textStyle = fieldStyle,
                 singleLine = singleLine,
                 minLines = minLines,
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 cursorBrush = SolidColor(FlowWhite),
                 decorationBox = { inner ->
-                    Box {
-                        if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box {
+                            if (value.isEmpty() && placeholder.isNotEmpty()) {
+                                Text(
+                                    text = placeholder,
+                                    style = fieldStyle.copy(color = FlowTextDisabled),
+                                )
+                            }
+                            inner()
+                        }
+                        if (suffix.isNotEmpty()) {
                             Text(
-                                text = placeholder,
-                                style = fieldStyle.copy(color = FlowTextDisabled),
+                                text = suffix,
+                                style = fieldStyle,
+                                modifier = Modifier.padding(start = FlowSpacing.xxs),
                             )
                         }
-                        inner()
                     }
                 },
             )
@@ -498,13 +513,14 @@ fun FlowFab(
     }
 }
 
-/** Monochrome toggle. Hairline track, solid thumb — no Material pill. */
+/** Monochrome toggle. Hairline track, solid thumb - no Material pill. */
 @Composable
 fun FlowSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    contentDescription: String? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     val inset = FlowSpacing.xxs
@@ -552,6 +568,13 @@ fun FlowSwitch(
                 onValueChange = {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onCheckedChange(it)
+                },
+            )
+            .then(
+                if (contentDescription != null) {
+                    Modifier.semantics { this.contentDescription = contentDescription }
+                } else {
+                    Modifier
                 },
             ),
         contentAlignment = Alignment.Center,
@@ -961,10 +984,17 @@ fun FlowDrawerItem(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    checked: Boolean? = null,
+    onCheckedChange: ((Boolean) -> Unit)? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     val labelColor by animateColorAsState(
-        targetValue = if (selected) FlowTextPrimary else FlowTextSecondary,
+        targetValue = when {
+            selected -> FlowTextPrimary
+            !enabled -> FlowTextDisabled
+            else -> FlowTextSecondary
+        },
         animationSpec = tween(FlowMotion.STANDARD),
         label = "drawerItemLabel",
     )
@@ -972,29 +1002,43 @@ fun FlowDrawerItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(
-                role = Role.Tab,
-                onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onClick()
-                },
-            )
-            .defaultMinSize(minHeight = FlowSizes.touchTarget)
-            .padding(vertical = FlowSpacing.sm),
+            .defaultMinSize(minHeight = FlowSizes.touchTarget),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .width(FlowSpacing.sm)
-                .height(FlowSizes.hairline)
-                .background(if (selected) FlowWhite else Color.Transparent),
-        )
-        Spacer(modifier = Modifier.width(FlowSpacing.sm))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            color = labelColor,
-        )
+                .weight(1f)
+                .clickable(
+                    enabled = enabled,
+                    role = Role.Tab,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onClick()
+                    },
+                )
+                .padding(vertical = FlowSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(FlowSpacing.sm)
+                    .height(FlowSizes.hairline)
+                    .background(if (selected) FlowWhite else Color.Transparent),
+            )
+            Spacer(modifier = Modifier.width(FlowSpacing.sm))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                color = labelColor,
+            )
+        }
+        if (checked != null && onCheckedChange != null) {
+            FlowSwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                contentDescription = label,
+            )
+        }
     }
 }
 
@@ -1115,10 +1159,10 @@ fun FlowInfoRow(
 @Composable
 fun FlowToggleRow(
     label: String,
-    supporting: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    supporting: String? = null,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -1131,8 +1175,10 @@ fun FlowToggleRow(
                 .padding(end = FlowSpacing.md),
         ) {
             FlowSectionLabel(label)
-            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-            FlowSupportingText(supporting)
+            if (!supporting.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+                FlowSupportingText(supporting)
+            }
         }
         FlowSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }

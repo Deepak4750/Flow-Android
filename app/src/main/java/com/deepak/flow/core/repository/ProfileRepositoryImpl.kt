@@ -4,12 +4,21 @@ import com.deepak.flow.core.database.UserProfileDao
 import com.deepak.flow.core.database.UserProfileEntity
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.model.UserProfile
+import com.deepak.flow.core.model.WaterReminderSettings
+import com.deepak.flow.core.model.parseWaterBottleStyleIndex
+import com.deepak.flow.core.model.WaterIntakeWrite
+import com.deepak.flow.core.model.encodeWaterAddLog
+import com.deepak.flow.core.model.encodeWaterCustomQuickAdds
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class ProfileRepositoryImpl(
     private val dao: UserProfileDao,
 ) : ProfileRepository {
+
+    private val waterIntakeMutex = Mutex()
 
     override fun observeProfile(): Flow<UserProfile?> =
         dao.observeProfile().map { it?.toDomain() }
@@ -65,6 +74,177 @@ class ProfileRepositoryImpl(
             ),
         )
     }
+
+    override suspend fun updateRemindersEnabled(enabled: Boolean) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                remindersEnabled = enabled,
+            ),
+        )
+    }
+
+    override suspend fun updateWaterEnabled(enabled: Boolean) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterEnabled = enabled,
+            ),
+        )
+    }
+
+    override suspend fun updateWaterGoalMl(millilitres: Int) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterGoalMl = millilitres,
+            ),
+        )
+    }
+
+    override suspend fun updateWaterBottleStyle(index: Int) {
+        val parsed = parseWaterBottleStyleIndex(index) ?: return
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterBottleStyleIndex = parsed,
+            ),
+        )
+    }
+
+    override suspend fun updateWaterIntake(
+        millilitres: Int,
+        epochDay: Long,
+        addLog: List<Int>,
+    ) {
+        waterIntakeMutex.withLock {
+            persistWaterIntakeLocked(millilitres, epochDay, addLog)
+        }
+    }
+
+    override suspend fun applyWaterIntakeWrite(
+        todayEpochDay: Long,
+        write: (UserProfile) -> WaterIntakeWrite?,
+    ): WaterIntakeWrite? = waterIntakeMutex.withLock {
+        val profile = dao.getProfile()?.toDomain() ?: return@withLock null
+        val update = write(profile) ?: return@withLock null
+        persistWaterIntakeLocked(update.millilitres, todayEpochDay, update.addLog)
+        update
+    }
+
+    private suspend fun persistWaterIntakeLocked(
+        millilitres: Int,
+        epochDay: Long,
+        addLog: List<Int>,
+    ) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterIntakeMl = millilitres.coerceAtLeast(0),
+                waterIntakeEpochDay = epochDay,
+                waterAddLog = encodeWaterAddLog(addLog),
+            ),
+        )
+    }
+
+    override suspend fun updateWaterCustomQuickAdds(amounts: List<Int>) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterCustomQuickAddsMl = encodeWaterCustomQuickAdds(amounts),
+            ),
+        )
+    }
+
+    override suspend fun updateWaterRemindersEnabled(enabled: Boolean) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterRemindersEnabled = enabled,
+            ),
+        )
+    }
+
+    override suspend fun updateWaterReminderInterval(minutes: Int) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterReminderIntervalMinutes = WaterReminderSettings.coerceIntervalMinutes(minutes),
+            ),
+        )
+    }
+
+    override suspend fun updateWaterActiveHoursEnabled(enabled: Boolean) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterActiveHoursEnabled = enabled,
+            ),
+        )
+    }
+
+    override suspend fun updateWaterActiveHoursStart(minutesOfDay: Int) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterActiveHoursStartMinutes = WaterReminderSettings.coerceMinutesOfDay(minutesOfDay),
+            ),
+        )
+    }
+
+    override suspend fun updateWaterActiveHoursEnd(minutesOfDay: Int) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                waterActiveHoursEndMinutes = WaterReminderSettings.coerceMinutesOfDay(minutesOfDay),
+            ),
+        )
+    }
+
+    override suspend fun updateKeepDataOnUninstall(enabled: Boolean) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                keepDataOnUninstall = enabled,
+            ),
+        )
+    }
 }
 
 private fun UserProfileEntity?.toUpsertEntity(
@@ -74,12 +254,46 @@ private fun UserProfileEntity?.toUpsertEntity(
     snoozeEnabled: Boolean = this?.snoozeEnabled ?: SnoozeSettings.DEFAULT_ENABLED,
     snoozeIntervalMinutes: Int = this?.snoozeIntervalMinutes
         ?: SnoozeSettings.DEFAULT_INTERVAL_MINUTES,
+    remindersEnabled: Boolean = this?.remindersEnabled ?: UserProfile.DEFAULT_REMINDERS_ENABLED,
+    waterEnabled: Boolean = this?.waterEnabled ?: UserProfile.DEFAULT_WATER_ENABLED,
+    waterGoalMl: Int? = this?.waterGoalMl,
+    waterBottleStyleIndex: Int? = this?.waterBottleStyleIndex,
+    waterIntakeMl: Int = this?.waterIntakeMl ?: 0,
+    waterIntakeEpochDay: Long? = this?.waterIntakeEpochDay,
+    waterAddLog: String = this?.waterAddLog.orEmpty(),
+    waterCustomQuickAddsMl: String = this?.waterCustomQuickAddsMl.orEmpty(),
+    waterRemindersEnabled: Boolean = this?.waterRemindersEnabled
+        ?: WaterReminderSettings.DEFAULT_ENABLED,
+    waterReminderIntervalMinutes: Int = this?.waterReminderIntervalMinutes
+        ?: WaterReminderSettings.DEFAULT_INTERVAL_MINUTES,
+    waterActiveHoursEnabled: Boolean = this?.waterActiveHoursEnabled
+        ?: WaterReminderSettings.DEFAULT_ACTIVE_HOURS_ENABLED,
+    waterActiveHoursStartMinutes: Int = this?.waterActiveHoursStartMinutes
+        ?: WaterReminderSettings.DEFAULT_ACTIVE_START_MINUTES,
+    waterActiveHoursEndMinutes: Int = this?.waterActiveHoursEndMinutes
+        ?: WaterReminderSettings.DEFAULT_ACTIVE_END_MINUTES,
+    keepDataOnUninstall: Boolean = this?.keepDataOnUninstall
+        ?: UserProfile.DEFAULT_KEEP_DATA_ON_UNINSTALL,
 ) = UserProfileEntity(
     displayName = displayName,
     nickname = nickname,
     onboardingCompleted = onboardingCompleted,
     snoozeEnabled = snoozeEnabled,
     snoozeIntervalMinutes = snoozeIntervalMinutes,
+    remindersEnabled = remindersEnabled,
+    waterEnabled = waterEnabled,
+    waterGoalMl = waterGoalMl,
+    waterBottleStyleIndex = waterBottleStyleIndex,
+    waterIntakeMl = waterIntakeMl,
+    waterIntakeEpochDay = waterIntakeEpochDay,
+    waterAddLog = waterAddLog,
+    waterCustomQuickAddsMl = waterCustomQuickAddsMl,
+    waterRemindersEnabled = waterRemindersEnabled,
+    waterReminderIntervalMinutes = waterReminderIntervalMinutes,
+    waterActiveHoursEnabled = waterActiveHoursEnabled,
+    waterActiveHoursStartMinutes = waterActiveHoursStartMinutes,
+    waterActiveHoursEndMinutes = waterActiveHoursEndMinutes,
+    keepDataOnUninstall = keepDataOnUninstall,
 )
 
 private fun UserProfileEntity.toDomain() = UserProfile(
@@ -88,4 +302,18 @@ private fun UserProfileEntity.toDomain() = UserProfile(
     onboardingCompleted = onboardingCompleted,
     snoozeEnabled = snoozeEnabled,
     snoozeIntervalMinutes = snoozeIntervalMinutes,
+    remindersEnabled = remindersEnabled,
+    waterEnabled = waterEnabled,
+    waterGoalMl = waterGoalMl,
+    waterBottleStyleIndex = waterBottleStyleIndex,
+    waterIntakeMl = waterIntakeMl,
+    waterIntakeEpochDay = waterIntakeEpochDay,
+    waterAddLog = waterAddLog,
+    waterCustomQuickAddsMl = waterCustomQuickAddsMl,
+    waterRemindersEnabled = waterRemindersEnabled,
+    waterReminderIntervalMinutes = waterReminderIntervalMinutes,
+    waterActiveHoursEnabled = waterActiveHoursEnabled,
+    waterActiveHoursStartMinutes = waterActiveHoursStartMinutes,
+    waterActiveHoursEndMinutes = waterActiveHoursEndMinutes,
+    keepDataOnUninstall = keepDataOnUninstall,
 )

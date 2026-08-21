@@ -61,7 +61,7 @@ class ReminderRepositoryImpl(
     override suspend fun deleteAllReminders() {
         // Alarms are keyed by reminder id, so every pending one must be cancelled
         // before the rows disappear.
-        dao.getAllIds().forEach { notificationScheduler.cancelReminder(it) }
+        cancelAllScheduledReminders()
         completionDao.deleteAll()
         dao.deleteAll()
         onDataChanged()
@@ -83,10 +83,14 @@ class ReminderRepositoryImpl(
         // Cancel every known alarm before rebuilding, so calling this on an already
         // scheduled process (a timezone change, say) cannot leave a stale alarm behind
         // for a reminder that is now disabled or past its end date.
-        dao.getAllIds().forEach { notificationScheduler.cancelReminder(it) }
+        cancelAllScheduledReminders()
         dao.getEnabled().forEach { entity ->
             notificationScheduler.scheduleNextOccurrence(entity.toDomain(json))
         }
+    }
+
+    override suspend fun cancelAllScheduledReminders() {
+        dao.getAllIds().forEach { notificationScheduler.cancelReminder(it) }
     }
 
     override fun observeTodayCompletions(dateEpochDay: Long): Flow<Set<Long>> =

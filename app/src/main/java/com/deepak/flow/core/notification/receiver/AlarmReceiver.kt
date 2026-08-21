@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.deepak.flow.FlowApplication
+import com.deepak.flow.core.model.remindersFeatureEnabled
+import com.deepak.flow.core.model.waterDrinkRemindersOn
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.notification.reminderNotificationBody
 import com.deepak.flow.core.scheduling.SchedulingEngine
@@ -19,6 +21,21 @@ import java.time.ZoneId
 class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        val isWater = intent.getBooleanExtra(EXTRA_IS_WATER, false)
+        if (isWater) {
+            NotificationChannelManager.createChannel(context)
+            val pendingResult = goAsync()
+            val app = context.applicationContext as FlowApplication
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                try {
+                    handleWaterAlarm(context, app)
+                } finally {
+                    pendingResult.finish()
+                }
+            }
+            return
+        }
+
         val reminderId = intent.getLongExtra(EXTRA_REMINDER_ID, -1L)
         val scheduledTimeMillis = intent.getLongExtra(EXTRA_SCHEDULED_TIME, -1L)
         val isSnooze = intent.getBooleanExtra(EXTRA_IS_SNOOZE, false)
@@ -54,6 +71,10 @@ class AlarmReceiver : BroadcastReceiver() {
     ) {
         val reminder = app.reminderRepository.getReminder(reminderId) ?: return
         if (!reminder.enabled) return
+        if (!app.profileRepository.getProfile().remindersFeatureEnabled()) {
+            app.notificationScheduler.cancelSnooze(reminderId)
+            return
+        }
 
         val today = LocalDate.now(ZoneId.systemDefault()).toEpochDay()
         val completedToday = app.reminderRepository.observeTodayCompletions(today).first()
@@ -80,6 +101,10 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val reminder = repository.getReminder(reminderId) ?: return
         if (!reminder.enabled) return
+        if (!app.profileRepository.getProfile().remindersFeatureEnabled()) {
+            scheduler.cancelReminder(reminderId)
+            return
+        }
 
         val isValid = engine.isOccurrenceStillValid(
             scheduledInstant = scheduledInstant,
@@ -114,9 +139,24 @@ class AlarmReceiver : BroadcastReceiver() {
         )
     }
 
+    private suspend fun handleWaterAlarm(
+        context: Context,
+        app: FlowApplication,
+    ) {
+        val profile = app.profileRepository.getProfile()
+        if (profile?.waterDrinkRemindersOn() != true) {
+            app.notificationScheduler.cancelWaterReminder()
+            NotificationChannelManager.cancelWaterReminderNotification(context)
+            return
+        }
+        NotificationChannelManager.postWaterReminderNotification(context)
+        app.notificationScheduler.syncWaterReminder(profile)
+    }
+
     companion object {
         const val EXTRA_REMINDER_ID = "extra_reminder_id"
         const val EXTRA_SCHEDULED_TIME = "extra_scheduled_time"
         const val EXTRA_IS_SNOOZE = "extra_is_snooze"
+        const val EXTRA_IS_WATER = "extra_is_water"
     }
 }

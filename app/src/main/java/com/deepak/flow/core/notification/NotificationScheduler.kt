@@ -6,6 +6,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.model.UserProfile
+import com.deepak.flow.core.model.WaterReminderSettings
+import com.deepak.flow.core.model.waterActiveHoursOrNull
+import com.deepak.flow.core.model.waterDrinkRemindersOn
 import com.deepak.flow.core.notification.receiver.AlarmReceiver
 import com.deepak.flow.core.scheduling.SchedulingEngine
 import java.time.Instant
@@ -83,6 +87,42 @@ class NotificationScheduler(
         scheduleExactOrFallback(triggerAtMillis, pendingIntent)
     }
 
+    fun syncWaterReminder(profile: UserProfile?) {
+        if (profile?.waterDrinkRemindersOn() != true) {
+            cancelWaterReminder()
+            return
+        }
+        val next = WaterReminderSettings.nextTriggerInstant(
+            from = Instant.now(),
+            intervalMinutes = profile.waterReminderIntervalMinutes,
+            activeHours = profile.waterActiveHoursOrNull(),
+            zoneId = zoneId,
+        )
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra(AlarmReceiver.EXTRA_IS_WATER, true)
+            putExtra(AlarmReceiver.EXTRA_SCHEDULED_TIME, next.toEpochMilli())
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            WATER_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        scheduleExactOrFallback(next.toEpochMilli(), pendingIntent)
+    }
+
+    fun cancelWaterReminder() {
+        val intent = Intent(context, AlarmReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            WATER_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
     private fun snoozeRequestCode(reminderId: Long): Int =
         (reminderId + 1_000_000L).toInt()
 
@@ -125,4 +165,8 @@ class NotificationScheduler(
     // canScheduleExactAlarms() report true unconditionally.
     private fun canScheduleExactAlarms(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+
+    companion object {
+        private const val WATER_REQUEST_CODE = 0x6C6F7701
+    }
 }

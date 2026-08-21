@@ -65,7 +65,7 @@ fun OnboardingScreen(
             Spacer(modifier = Modifier.height(FlowSpacing.lg))
             FlowFieldHeading(
                 label = stringResource(R.string.settings_label_nickname),
-                supporting = "Optional — what Flow calls you in greetings",
+                supporting = "Optional. What Flow calls you in greetings",
             )
             FlowTextField(
                 value = uiState.nickname,

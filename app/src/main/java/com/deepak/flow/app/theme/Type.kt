@@ -16,7 +16,7 @@ private val FlowMono = FontFamily.Monospace
  * look the same on every screen. Pick by role, never by eye.
  *
  *   Screen hero (greeting, tagline, opening statement)
- *       headlineLarge / FlowTextPrimary        — via FlowScreenTitle
+ *       headlineLarge / FlowTextPrimary       - via FlowScreenTitle
  *   Prominent item (the next-up reminder, the drawer identity)
  *       headlineMedium / FlowTextPrimary
  *   List item title, text field input, dialog title

@@ -14,6 +14,8 @@ data class DailyProgress(
         get() = totalTasks > 0
 }
 
+fun DailyProgress.formatTodayCount(): String = "$completedTasks of $totalTasks"
+
 /**
  * Whether the cell at [index] (left-to-right, top-to-bottom) should be filled.
  * Each column fills from the bottom up; progress then moves to the next column.

@@ -10,8 +10,13 @@ import com.deepak.flow.core.notification.NotificationCancelGuard
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.notification.ReminderNotificationActionPlan
 import com.deepak.flow.core.notification.ReminderNotificationIntents
+import com.deepak.flow.core.notification.WATER_NOTIFICATION_GUARD_ID
+import com.deepak.flow.core.notification.WaterNotificationAddAmountsMl
+import com.deepak.flow.core.notification.WaterNotificationIntents
+import com.deepak.flow.core.notification.WaterNotificationSession
 import com.deepak.flow.core.notification.planForReminderNotificationAction
 import com.deepak.flow.core.notification.reminderNotificationId
+import com.deepak.flow.core.widget.FlowWidgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,6 +27,16 @@ import java.time.ZoneId
 class NotificationActionReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        when (intent.action) {
+            WaterNotificationIntents.ACTION_ADD,
+            WaterNotificationIntents.ACTION_BUSY,
+            WaterNotificationIntents.ACTION_RESTORE,
+            -> {
+                handleWater(context, intent)
+                return
+            }
+        }
+
         val reminderId = intent.getLongExtra(EXTRA_REMINDER_ID, -1L)
         if (reminderId < 0) return
 
@@ -37,6 +52,39 @@ class NotificationActionReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 execute(context, app, reminderId, plan)
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+
+    private fun handleWater(context: Context, intent: Intent) {
+        if (intent.action == WaterNotificationIntents.ACTION_RESTORE) {
+            if (NotificationCancelGuard.consume(WATER_NOTIFICATION_GUARD_ID)) return
+            if (WaterNotificationSession.isFilled(context)) return
+            NotificationChannelManager.postWaterReminderNotification(
+                context,
+                restartSession = false,
+            )
+            return
+        }
+        val pendingResult = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                when (intent.action) {
+                    WaterNotificationIntents.ACTION_BUSY -> {
+                        NotificationChannelManager.cancelWaterReminderNotification(context)
+                    }
+                    WaterNotificationIntents.ACTION_ADD -> {
+                        val amount = intent.getIntExtra(WaterNotificationIntents.EXTRA_AMOUNT_ML, 0)
+                        if (amount !in WaterNotificationAddAmountsMl) return@launch
+                        val added = FlowWidgets.addWaterMl(context, amount)
+                        if (added <= 0) return@launch
+                        WaterNotificationSession.add(context, added)
+                        // Logging from the reminder means the nudge is done until the next schedule.
+                        NotificationChannelManager.cancelWaterReminderNotification(context)
+                    }
+                }
             } finally {
                 pendingResult.finish()
             }

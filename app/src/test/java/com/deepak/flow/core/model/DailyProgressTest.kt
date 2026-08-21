@@ -30,6 +30,14 @@ class DailyProgressTest {
     }
 
     @Test
+    fun formatTodayCount_isCompletedOfTotal() {
+        assertEquals(
+            "2 of 5",
+            DailyProgress(totalTasks = 5, completedTasks = 2).formatTodayCount(),
+        )
+    }
+
+    @Test
     fun dotMatrix_fillsEachColumnBottomToTopThenMovesRight() {
         val columns = 4
         val rows = 3

@@ -25,4 +25,10 @@ val FlowTextTertiary = Color(0xFFADADAD)
 val FlowTextDisabled = Color(0xFF7A7A7A)
 
 val FlowAccent = Color(0xFF4FC3F7)
+val FlowWaterFill = Color(0xFF5CEEEE)
+/** Soft luminous bloom under the bottle. */
+val FlowWaterGlow = Color(0xFF4DE8E8)
+val FlowWaterSurface = Color(0xFFA8FFFF)
+/** Crisp silhouette ring so the bottle reads on AMOLED and LCD. */
+val FlowBottleOutline = Color(0xFFD8D8D8)
 val FlowError = Color(0xFFE57373)

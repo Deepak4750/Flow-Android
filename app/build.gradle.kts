@@ -13,9 +13,9 @@ android {
         applicationId = "com.deepak.flow"
         minSdk = 30
         targetSdk = 37
-        // Sideloaded APKs only update in place — and keep reminders — when this
+        // Sideloaded APKs only update in place - and keep reminders - when this
         // number is higher than the installed build. Bump it for every APK you share.
-        versionCode = 26
+        versionCode = 90
         versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

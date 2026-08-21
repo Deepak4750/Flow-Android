@@ -71,7 +71,7 @@ fun AboutScreen(
                 label = stringResource(R.string.about_label_version),
                 value = formatInstalledVersionLabel(
                     versionName = BuildConfig.VERSION_NAME,
-                    previewEnabled = updateState.previewEnabled,
+                    versionCode = BuildConfig.VERSION_CODE,
                 ),
                 onClick = {
                     if (updateState.previewUnlocked) return@FlowInfoRow

@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.model.SnoozeSettings
+import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ReminderRepository
@@ -22,6 +23,7 @@ data class SettingsUiState(
     val snoozeEnabled: Boolean = SnoozeSettings.DEFAULT_ENABLED,
     val snoozeIntervalMinutes: Int = SnoozeSettings.DEFAULT_INTERVAL_MINUTES,
     val reminderCount: Int = 0,
+    val keepDataOnUninstall: Boolean = true,
     val isSaving: Boolean = false,
 ) {
     val hasUnsavedChanges: Boolean
@@ -49,6 +51,8 @@ class SettingsViewModel(
                 _uiState.update { state ->
                     val snoozeEnabled = profile?.snoozeEnabled ?: SnoozeSettings.DEFAULT_ENABLED
                     val snooze = profile?.snoozeIntervalMinutes ?: SnoozeSettings.DEFAULT_INTERVAL_MINUTES
+                    val keepData = profile?.keepDataOnUninstall
+                        ?: UserProfile.DEFAULT_KEEP_DATA_ON_UNINSTALL
                     // Never overwrite text the user is currently editing.
                     if (state.hasUnsavedChanges) {
                         state.copy(
@@ -56,6 +60,7 @@ class SettingsViewModel(
                             savedNickname = nickname,
                             snoozeEnabled = snoozeEnabled,
                             snoozeIntervalMinutes = snooze,
+                            keepDataOnUninstall = keepData,
                         )
                     } else {
                         state.copy(
@@ -65,6 +70,7 @@ class SettingsViewModel(
                             savedNickname = nickname,
                             snoozeEnabled = snoozeEnabled,
                             snoozeIntervalMinutes = snooze,
+                            keepDataOnUninstall = keepData,
                         )
                     }
                 }
@@ -114,14 +120,19 @@ class SettingsViewModel(
         }
     }
 
+    fun setKeepDataOnUninstall(enabled: Boolean) {
+        _uiState.update { it.copy(keepDataOnUninstall = enabled) }
+        viewModelScope.launch {
+            profileRepository.updateKeepDataOnUninstall(enabled)
+        }
+    }
+
     fun incrementSnoozeInterval() {
-        val next = uiState.value.snoozeIntervalMinutes + SnoozeSettings.STEP_MINUTES
-        updateSnoozeInterval(SnoozeSettings.coerceIntervalMinutes(next))
+        updateSnoozeInterval(SnoozeSettings.nextInterval(uiState.value.snoozeIntervalMinutes))
     }
 
     fun decrementSnoozeInterval() {
-        val next = uiState.value.snoozeIntervalMinutes - SnoozeSettings.STEP_MINUTES
-        updateSnoozeInterval(SnoozeSettings.coerceIntervalMinutes(next))
+        updateSnoozeInterval(SnoozeSettings.previousInterval(uiState.value.snoozeIntervalMinutes))
     }
 
     fun onSnoozeIntervalInput(raw: String) {

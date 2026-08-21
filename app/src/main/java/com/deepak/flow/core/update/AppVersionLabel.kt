@@ -1,4 +1,4 @@
 package com.deepak.flow.core.update
 
-fun formatInstalledVersionLabel(versionName: String, previewEnabled: Boolean): String =
-    if (previewEnabled) "$versionName Beta" else versionName
+fun formatInstalledVersionLabel(versionName: String, versionCode: Int): String =
+    "$versionName ($versionCode) Beta"

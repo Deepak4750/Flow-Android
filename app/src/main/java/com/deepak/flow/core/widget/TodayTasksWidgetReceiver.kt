@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import com.deepak.flow.MainActivity
+import com.deepak.flow.core.widget.WidgetLaunch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -43,7 +44,10 @@ class TodayTasksWidgetReceiver : AppWidgetProvider() {
                 return
             }
             val launch = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(WidgetLaunch.EXTRA_DESTINATION, WidgetLaunch.DEST_REMINDERS)
             }
             context.startActivity(launch)
             return

@@ -2,13 +2,20 @@ package com.deepak.flow
 
 import android.app.Application
 import androidx.room.Room
+import com.deepak.flow.core.backup.KeepDataStore
 import com.deepak.flow.core.database.FlowDatabase
+import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.notification.NotificationScheduler
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ProfileRepositoryImpl
 import com.deepak.flow.core.repository.ReminderRepository
 import com.deepak.flow.core.repository.ReminderRepositoryImpl
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
 
 class FlowApplication : Application() {
 
@@ -24,23 +31,33 @@ class FlowApplication : Application() {
     lateinit var profileRepository: ProfileRepository
         private set
 
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onCreate() {
         super.onCreate()
         NotificationChannelManager.createChannel(this)
+        KeepDataStore.restoreIfNeeded(this)
 
-        // Reminders are user data. Never drop tables for a released schema.
-        // Versions 1–2 existed only during development and were never shipped,
+        // Tasks are user data. Never drop tables for a released schema.
+        // Versions 1-2 existed only during development and were never shipped,
         // so those can still be rebuilt if a stale debug database turns up.
         database = Room.databaseBuilder(
             applicationContext,
             FlowDatabase::class.java,
-            "flow_database",
+            KeepDataStore.DATABASE_NAME,
         ).fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2)
             .addMigrations(
                 FlowDatabase.MIGRATION_3_4,
                 FlowDatabase.MIGRATION_4_5,
                 FlowDatabase.MIGRATION_5_6,
                 FlowDatabase.MIGRATION_6_7,
+                FlowDatabase.MIGRATION_7_8,
+                FlowDatabase.MIGRATION_8_9,
+                FlowDatabase.MIGRATION_9_10,
+                FlowDatabase.MIGRATION_10_11,
+                FlowDatabase.MIGRATION_11_12,
+                FlowDatabase.MIGRATION_12_13,
+                FlowDatabase.MIGRATION_13_14,
             )
             .build()
 
@@ -55,5 +72,27 @@ class FlowApplication : Application() {
             dao = database.userProfileDao(),
         )
         com.deepak.flow.core.widget.FlowWidgets.refresh(this)
+        applicationScope.launch {
+            notificationScheduler.syncWaterReminder(profileRepository.getProfile())
+        }
+        observeKeepDataCopy()
+    }
+
+    private fun observeKeepDataCopy() {
+        applicationScope.launch {
+            combine(
+                profileRepository.observeProfile(),
+                reminderRepository.observeReminders(),
+            ) { profile, _ -> profile }
+                .collect { profile ->
+                    KeepDataStore.sync(
+                        context = this@FlowApplication,
+                        database = database,
+                        keepEnabled = profile?.keepDataOnUninstall
+                            ?: UserProfile.DEFAULT_KEEP_DATA_ON_UNINSTALL,
+                        onboardingCompleted = profile?.onboardingCompleted == true,
+                    )
+                }
+        }
     }
 }

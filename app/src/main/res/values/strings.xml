@@ -6,7 +6,7 @@
     <string name="placeholder_display_name">Your name</string>
     <string name="placeholder_nickname">e.g. Alex</string>
 
-    <!-- Create / edit reminder -->
+    <!-- Create / edit task -->
     <string name="placeholder_task">e.g. Morning workout</string>
     <string name="placeholder_custom_category">e.g. Side project</string>
     <string name="placeholder_note">e.g. Time to show up.</string>
@@ -15,7 +15,7 @@
     <!-- Navigation -->
     <string name="content_description_open_menu">Open menu</string>
     <string name="content_description_back">Back</string>
-    <string name="content_description_create_reminder">Create reminder</string>
+    <string name="content_description_create_reminder">Create task</string>
     <string name="content_description_delete_reminder">Delete %1$s</string>
     <string name="content_description_weekday_picker">Days of the week. Tap to toggle, or hold and swipe to select.</string>
 
@@ -23,7 +23,7 @@
     <string name="action_cancel">Cancel</string>
     <string name="action_delete">Delete</string>
     <string name="action_keep">Keep</string>
-    <string name="action_delete_all">Delete all reminders</string>
+    <string name="action_delete_all">Delete all tasks</string>
     <string name="action_save_profile">Save</string>
     <string name="action_save_changes">Save</string>
     <string name="action_discard_changes">No</string>
@@ -31,13 +31,17 @@
     <string name="reminder_unsaved_message">You can keep them, or leave as they were.</string>
 
     <!-- Home -->
-    <string name="reminder_delete_title">Delete reminder?</string>
+    <string name="reminder_delete_title">Delete task?</string>
     <string name="reminder_delete_message">“%1$s” and its schedule will be removed. This can\'t be undone.</string>
 
     <!-- Notifications -->
     <string name="notification_action_complete">Complete</string>
     <string name="notification_action_snooze">Snooze</string>
     <string name="notification_action_dismiss">Dismiss</string>
+    <string name="notification_water_title">H₂O</string>
+    <string name="notification_water_add_250">250 ml</string>
+    <string name="notification_water_add_500">500 ml</string>
+    <string name="notification_water_dismiss">Dismiss</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -46,7 +50,7 @@
     <string name="settings_label_name">Name</string>
     <string name="settings_label_nickname">Nickname</string>
     <string name="settings_section_notifications">Notifications</string>
-    <string name="settings_notifications_supporting">Flow needs notifications to remind you.</string>
+    <string name="settings_notifications_supporting">Flow needs notifications to reach you.</string>
     <string name="settings_label_notifications">Permission</string>
     <string name="settings_value_allowed">Allowed</string>
     <string name="settings_value_blocked">Blocked</string>
@@ -57,9 +61,10 @@
     <string name="settings_snooze_value_description">snooze interval</string>
     <string name="settings_section_data">Data</string>
     <string name="settings_data_supporting">Everything stays on this device.</string>
-    <string name="settings_label_reminders">Reminders</string>
-    <string name="settings_delete_all_title">Delete all reminders?</string>
-    <string name="settings_delete_all_message">All %1$d reminders and their alarms will be removed. This can\'t be undone.</string>
+    <string name="settings_label_keep_data">Keep data</string>
+    <string name="settings_keep_data_reason">If you uninstall Flow and install it later, your tasks will still be here.</string>
+    <string name="settings_delete_all_title">Delete all tasks?</string>
+    <string name="settings_delete_all_message">All %1$d tasks and their alarms will be removed. This can\'t be undone.</string>
 
     <!-- About -->
     <string name="about_title">About</string>
@@ -67,7 +72,7 @@
     <string name="about_label_version">Version</string>
     <string name="about_label_privacy">Privacy</string>
     <string name="about_privacy">Flow is private and works offline.</string>
-    <string name="about_privacy_detail">Flow stores your reminders on this device only. There is no account, no sync, and no analytics. Flow uses the network only to check for app updates.</string>
+    <string name="about_privacy_detail">Flow stores your tasks on this device only. There is no account, no sync, and no analytics. If Keep data is on, a copy can remain on this phone after uninstall. Flow uses the network only to check for app updates.</string>
 
     <!-- Updates -->
     <string name="settings_section_app">App</string>
@@ -87,7 +92,7 @@
     <string name="update_preview_supporting">You see new builds before anyone else.</string>
 
     <!-- Widgets -->
-    <string name="widget_today_description">Today\'s reminders. Scroll the list, mark them complete, or tap to open Flow.</string>
+    <string name="widget_today_description">Today\'s tasks. Scroll the list, mark them complete, or tap to open Flow.</string>
     <string name="widget_matrix_description">Today\'s progress as a square of dots. Swipe to see the percentage. Tap to open Flow.</string>
     <string name="widget_today_label">Today</string>
     <string name="widget_matrix_label">Progress</string>
@@ -104,4 +109,13 @@
     <string name="widget_mark_complete">Mark complete</string>
     <string name="widget_marked_complete">Completed</string>
     <string name="widget_next_time">Next, %1$s</string>
+    <string name="widget_water_label">H₂O</string>
+    <string name="widget_water_description">Today\'s water. Add 250 ml, 500 ml, or 1 L without opening Flow.</string>
+    <string name="widget_water_setup">Open Flow to set this up.</string>
+    <string name="widget_water_count">%1$s of %2$s</string>
+    <string name="widget_water_add_250">250 ml</string>
+    <string name="widget_water_add_500">500 ml</string>
+    <string name="widget_water_add_1l">1 L</string>
+    <string name="widget_water_bottle">Water bottle</string>
+    <string name="widget_water_preview_count">0.5 L of 2 L</string>
 </resources>

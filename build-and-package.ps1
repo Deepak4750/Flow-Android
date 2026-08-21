@@ -1,4 +1,4 @@
-# Flow Phase 6 — build, test, assembleDebug, and create delivery ZIP
+# Flow Phase 6 - build, test, assembleDebug, and create delivery ZIP
 $ErrorActionPreference = "Stop"
 $ProjectRoot = $PSScriptRoot
 $ZipPath = Join-Path (Split-Path $ProjectRoot -Parent) "Flow-Phase6-Claude.zip"
@@ -11,7 +11,7 @@ $LocalProps = Join-Path $ProjectRoot "local.properties"
 Set-Location $ProjectRoot
 
 if (-not (Test-Path $WrapperJar)) {
-    Write-Host "gradle-wrapper.jar missing — generating wrapper..."
+    Write-Host "gradle-wrapper.jar missing - generating wrapper..."
     if (Test-Path $GradleBat) {
         & $GradleBat wrapper --gradle-version 9.5
     } else {

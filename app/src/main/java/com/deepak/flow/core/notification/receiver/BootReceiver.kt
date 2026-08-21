@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.deepak.flow.FlowApplication
+import com.deepak.flow.core.model.remindersFeatureEnabled
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,7 +23,12 @@ class BootReceiver : BroadcastReceiver() {
 
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                app.reminderRepository.rescheduleAllEnabledReminders()
+                if (app.profileRepository.getProfile().remindersFeatureEnabled()) {
+                    app.reminderRepository.rescheduleAllEnabledReminders()
+                } else {
+                    app.reminderRepository.cancelAllScheduledReminders()
+                }
+                app.notificationScheduler.syncWaterReminder(app.profileRepository.getProfile())
                 com.deepak.flow.core.widget.FlowWidgets.refresh(app)
             } finally {
                 pendingResult.finish()

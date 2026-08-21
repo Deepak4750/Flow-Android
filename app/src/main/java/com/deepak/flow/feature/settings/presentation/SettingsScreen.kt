@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,7 @@ import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.components.FlowToggleRow
 import com.deepak.flow.app.theme.FlowSpacing
+import com.deepak.flow.app.theme.FlowTextTertiary
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.update.AppUpdateViewModel
 import com.deepak.flow.core.update.formatInstalledVersionLabel
@@ -173,11 +175,18 @@ fun SettingsScreen(
                 label = stringResource(R.string.settings_section_data),
                 supporting = stringResource(R.string.settings_data_supporting),
             )
-            FlowInfoRow(
-                label = stringResource(R.string.settings_label_reminders),
-                value = uiState.reminderCount.toString(),
+            FlowToggleRow(
+                label = stringResource(R.string.settings_label_keep_data),
+                checked = uiState.keepDataOnUninstall,
+                onCheckedChange = viewModel::setKeepDataOnUninstall,
             )
             Spacer(modifier = Modifier.height(FlowSpacing.xs))
+            Text(
+                text = stringResource(R.string.settings_keep_data_reason),
+                style = MaterialTheme.typography.bodySmall,
+                color = FlowTextTertiary,
+            )
+            Spacer(modifier = Modifier.height(FlowSpacing.md))
             FlowTextAction(
                 text = stringResource(R.string.action_delete_all),
                 onClick = { confirmDeleteAll = true },
@@ -194,7 +203,7 @@ fun SettingsScreen(
                 label = stringResource(R.string.about_label_version),
                 value = formatInstalledVersionLabel(
                     versionName = BuildConfig.VERSION_NAME,
-                    previewEnabled = updateState.previewEnabled,
+                    versionCode = BuildConfig.VERSION_CODE,
                 ),
             )
             Spacer(modifier = Modifier.height(FlowSpacing.xs))
