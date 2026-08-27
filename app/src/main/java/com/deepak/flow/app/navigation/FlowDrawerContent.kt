@@ -51,9 +51,11 @@ fun FlowDrawerContent(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -87,11 +89,12 @@ fun FlowDrawerContent(
             FlowDrawerItem(
                 label = destination.label,
                 selected = destination == selected,
-                enabled = destination.isEnabled(remindersEnabled, waterEnabled),
-                checked = destination.featureChecked(remindersEnabled, waterEnabled),
+                enabled = destination.isEnabled(remindersEnabled, waterEnabled, gymEnabled),
+                checked = destination.featureChecked(remindersEnabled, waterEnabled, gymEnabled),
                 onCheckedChange = when (destination) {
                     FlowDrawerDestination.REMINDERS -> onRemindersEnabledChange
                     FlowDrawerDestination.WATER -> onWaterEnabledChange
+                    FlowDrawerDestination.GYM -> onGymEnabledChange
                     else -> null
                 },
                 onClick = { onDestinationClick(destination) },
@@ -111,8 +114,10 @@ fun FlowShell(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
@@ -135,10 +140,12 @@ fun FlowShell(
                 userName = userName,
                 remindersEnabled = remindersEnabled,
                 waterEnabled = waterEnabled,
+                gymEnabled = gymEnabled,
                 onRemindersEnabledChange = onRemindersEnabledChange,
                 onWaterEnabledChange = onWaterEnabledChange,
+                onGymEnabledChange = onGymEnabledChange,
                 onDestinationClick = { destination ->
-                    if (!destination.isEnabled(remindersEnabled, waterEnabled)) {
+                    if (!destination.isEnabled(remindersEnabled, waterEnabled, gymEnabled)) {
                         return@FlowDrawerContent
                     }
                     scope.launch { drawerState.close() }

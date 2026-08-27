@@ -10,6 +10,10 @@ data class UserProfile(
     val snoozeIntervalMinutes: Int = SnoozeSettings.DEFAULT_INTERVAL_MINUTES,
     val remindersEnabled: Boolean = DEFAULT_REMINDERS_ENABLED,
     val waterEnabled: Boolean = DEFAULT_WATER_ENABLED,
+    val gymEnabled: Boolean = DEFAULT_GYM_ENABLED,
+    val gymWeightUnit: String = DEFAULT_GYM_WEIGHT_UNIT,
+    val gymSetRestSeconds: Int = DEFAULT_GYM_SET_REST_SECONDS,
+    val gymExerciseRestSeconds: Int = DEFAULT_GYM_EXERCISE_REST_SECONDS,
     val waterGoalMl: Int? = null,
     val waterBottleStyleIndex: Int? = null,
     val waterIntakeMl: Int = 0,
@@ -26,6 +30,10 @@ data class UserProfile(
     companion object {
         const val DEFAULT_REMINDERS_ENABLED = true
         const val DEFAULT_WATER_ENABLED = false
+        const val DEFAULT_GYM_ENABLED = true
+        const val DEFAULT_GYM_WEIGHT_UNIT = "KG"
+        const val DEFAULT_GYM_SET_REST_SECONDS = 90
+        const val DEFAULT_GYM_EXERCISE_REST_SECONDS = 120
         const val DEFAULT_KEEP_DATA_ON_UNINSTALL = true
         const val MIN_WATER_GOAL_ML = 250
         const val MAX_WATER_GOAL_ML = 7000
@@ -42,6 +50,9 @@ fun UserProfile?.remindersFeatureEnabled(): Boolean =
 
 fun UserProfile?.waterFeatureEnabled(): Boolean =
     this?.waterEnabled ?: UserProfile.DEFAULT_WATER_ENABLED
+
+fun UserProfile?.gymFeatureEnabled(): Boolean =
+    this?.gymEnabled ?: UserProfile.DEFAULT_GYM_ENABLED
 
 fun parseWaterGoalMl(raw: String): Int? {
     val cleaned = raw.trim()

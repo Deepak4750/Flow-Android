@@ -25,6 +25,7 @@ data class HistoryDayUiState(
     val dateLabel: String,
     val tasksSubtitle: String,
     val waterSubtitle: String,
+    val gymSubtitle: String,
 )
 
 data class HistoryTasksUiState(
@@ -140,6 +141,11 @@ private fun HistoryDaySummary.toDayUiState(dateLabel: String) = HistoryDayUiStat
         else -> "$taskCount completed"
     },
     waterSubtitle = if (waterIntakeMl > 0) formatWaterLiters(waterIntakeMl) else "No water logged",
+    gymSubtitle = when (gymWorkoutCount) {
+        0 -> "No workouts"
+        1 -> "1 workout"
+        else -> "$gymWorkoutCount workouts"
+    },
 )
 
 private fun HistoryTaskCompletion.toItem(

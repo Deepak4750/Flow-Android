@@ -10,6 +10,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.deepak.flow.MainActivity
 import com.deepak.flow.R
+import com.deepak.flow.core.gym.GymLogic
 import com.deepak.flow.core.notification.receiver.NotificationActionReceiver
 import com.deepak.flow.core.widget.WidgetLaunch
 import com.deepak.flow.core.widget.putWidgetDestination
@@ -17,6 +18,8 @@ import com.deepak.flow.core.widget.putWidgetDestination
 object NotificationChannelManager {
     const val CHANNEL_ID = "flow_reminder_alerts"
     const val WATER_CHANNEL_ID = "flow_water_alerts"
+    const val GYM_CHANNEL_ID = "flow_gym_active"
+    const val GYM_EVENTS_CHANNEL_ID = "flow_gym_events"
     private const val CHANNEL_NAME = "Tasks"
     private const val WATER_CHANNEL_NAME = "H₂O"
     private val RetiredChannelIds = listOf(
@@ -34,6 +37,10 @@ object NotificationChannelManager {
     private const val WATER_REQUEST_ADD_500 = 0x6C6F7712
     private const val WATER_REQUEST_BUSY = 0x6C6F7714
     private const val WATER_REQUEST_RESTORE = 0x6C6F7715
+    private const val ACTIVE_WORKOUT_REQUEST_OPEN = 0x6C6F7721
+    private const val ACTIVE_WORKOUT_REQUEST_RESTORE = 0x6C6F7722
+    private const val REST_COMPLETE_NOTIFICATION_ID = 0x6C6F7704
+    private const val REST_COMPLETE_REQUEST_OPEN = 0x6C6F7723
 
     fun createChannel(context: Context) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -56,8 +63,29 @@ object NotificationChannelManager {
             enableVibration(true)
             setShowBadge(true)
         }
+        val gymChannel = NotificationChannel(
+            GYM_CHANNEL_ID,
+            context.getString(R.string.notification_channel_gym),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = context.getString(R.string.notification_channel_gym_description)
+            enableVibration(false)
+            setShowBadge(false)
+            setSound(null, null)
+        }
+        val gymEventsChannel = NotificationChannel(
+            GYM_EVENTS_CHANNEL_ID,
+            context.getString(R.string.notification_channel_gym_events),
+            NotificationManager.IMPORTANCE_DEFAULT,
+        ).apply {
+            description = context.getString(R.string.notification_channel_gym_events_description)
+            enableVibration(true)
+            setShowBadge(false)
+        }
         manager.createNotificationChannel(channel)
         manager.createNotificationChannel(waterChannel)
+        manager.createNotificationChannel(gymChannel)
+        manager.createNotificationChannel(gymEventsChannel)
     }
 
     fun postReminderNotification(
@@ -143,6 +171,124 @@ object NotificationChannelManager {
         NotificationCancelGuard.arm(WATER_NOTIFICATION_GUARD_ID)
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancel(WATER_NOTIFICATION_ID)
+    }
+
+    fun postActiveWorkoutNotification(
+        context: Context,
+        exerciseName: String?,
+        workoutStartedAtEpochMilli: Long,
+        exerciseStartedAtEpochMilli: Long?,
+        nowEpochMilli: Long = System.currentTimeMillis(),
+    ) {
+        createChannel(context)
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return
+
+        val body = GymLogic.activeWorkoutNotificationBody(
+            exerciseName = exerciseName,
+            workoutStartedAtEpochMilli = workoutStartedAtEpochMilli,
+            exerciseStartedAtEpochMilli = exerciseStartedAtEpochMilli,
+            nowEpochMilli = nowEpochMilli,
+        )
+        val openAppIntent = PendingIntent.getActivity(
+            context,
+            ACTIVE_WORKOUT_REQUEST_OPEN,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putWidgetDestination(WidgetLaunch.DEST_GYM_FREE_WORKOUT)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val contentText = body.lineSequence().firstOrNull().orEmpty()
+        val notification = NotificationCompat.Builder(context, GYM_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(context.getString(R.string.notification_workout_in_progress))
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(openAppIntent)
+            .setDeleteIntent(activeWorkoutRestorePendingIntent(context))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setShowWhen(false)
+            .build()
+        try {
+            manager.notify(ACTIVE_WORKOUT_NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // POST_NOTIFICATIONS was denied after the channel was created.
+        }
+    }
+
+    fun cancelActiveWorkoutNotification(context: Context) {
+        NotificationCancelGuard.arm(ACTIVE_WORKOUT_NOTIFICATION_GUARD_ID)
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(ACTIVE_WORKOUT_NOTIFICATION_ID)
+    }
+
+    /**
+     * One-shot alert when Set Rest reaches zero naturally (not Skip).
+     * Separate from the ongoing WORKOUT IN PROGRESS notification.
+     */
+    fun postRestCompleteNotification(context: Context, exerciseName: String?) {
+        createChannel(context)
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return
+        val openAppIntent = PendingIntent.getActivity(
+            context,
+            REST_COMPLETE_REQUEST_OPEN,
+            Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putWidgetDestination(WidgetLaunch.DEST_GYM_FREE_WORKOUT)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val body = buildString {
+            if (!exerciseName.isNullOrBlank()) {
+                append(exerciseName.trim().uppercase())
+                append('\n')
+            }
+            append(context.getString(R.string.notification_rest_complete_body))
+        }
+        val notification = NotificationCompat.Builder(context, GYM_EVENTS_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(context.getString(R.string.notification_rest_complete_title))
+            .setContentText(
+                if (!exerciseName.isNullOrBlank()) {
+                    exerciseName.trim().uppercase()
+                } else {
+                    context.getString(R.string.notification_rest_complete_body)
+                },
+            )
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(openAppIntent)
+            .addAction(
+                R.drawable.ic_notification,
+                context.getString(R.string.notification_rest_complete_action),
+                openAppIntent,
+            )
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setTimeoutAfter(45_000L)
+            .build()
+        try {
+            manager.notify(REST_COMPLETE_NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // POST_NOTIFICATIONS denied.
+        }
+    }
+
+    fun cancelRestCompleteNotification(context: Context) {
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(REST_COMPLETE_NOTIFICATION_ID)
     }
 
     fun cancelReminderNotification(context: Context, reminderId: Long) {
@@ -309,6 +455,20 @@ object NotificationChannelManager {
         return PendingIntent.getBroadcast(
             context,
             WATER_REQUEST_RESTORE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun activeWorkoutRestorePendingIntent(context: Context): PendingIntent {
+        val intent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = ActiveWorkoutNotificationIntents.ACTION_RESTORE
+            data = Uri.parse("flow://gym/active-workout")
+            addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            ACTIVE_WORKOUT_REQUEST_RESTORE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

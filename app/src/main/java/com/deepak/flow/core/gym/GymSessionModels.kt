@@ -45,6 +45,10 @@ data class GymWorkoutSession(
     val restEndsAtEpochMilli: Long? = null,
     val restDurationSeconds: Int = GymLimits.SET_REST_DEFAULT_SECONDS,
     val currentExerciseIndex: Int = 0,
+    /** When the current exercise became current. Null until the first exercise exists. */
+    val currentExerciseStartedAtEpochMilli: Long? = null,
+    val starred: Boolean = false,
+    val title: String = "",
     val exercises: List<GymWorkoutExercise> = emptyList(),
 )
 
@@ -54,4 +58,4 @@ data class GymWorkoutSummary(
     val setCount: Int,
     val volumeKg: Double?,
 )
-
+

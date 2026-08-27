@@ -19,6 +19,7 @@ data class HistoryDaySummary(
     val dateEpochDay: Long,
     val taskCount: Int,
     val waterIntakeMl: Int,
+    val gymWorkoutCount: Int = 0,
 )
 
 data class HistorySeriesPoint(

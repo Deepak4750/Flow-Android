@@ -19,6 +19,38 @@ interface GymWorkoutDao {
     @Query(
         """
         SELECT * FROM gym_workouts
+        WHERE status = :status
+          AND endedAtEpochMilli IS NOT NULL
+          AND endedAtEpochMilli >= :fromInclusive
+          AND endedAtEpochMilli < :toExclusive
+        ORDER BY endedAtEpochMilli DESC
+        """,
+    )
+    fun observeCompletedBetween(
+        status: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+    ): Flow<List<GymWorkoutEntity>>
+
+    @Query(
+        """
+        SELECT * FROM gym_workouts
+        WHERE status = :status
+          AND endedAtEpochMilli IS NOT NULL
+          AND endedAtEpochMilli >= :fromInclusive
+          AND endedAtEpochMilli < :toExclusive
+        ORDER BY endedAtEpochMilli DESC
+        """,
+    )
+    suspend fun getCompletedBetween(
+        status: String,
+        fromInclusive: Long,
+        toExclusive: Long,
+    ): List<GymWorkoutEntity>
+
+    @Query(
+        """
+        SELECT * FROM gym_workouts
         WHERE type = :type AND status = :status
         ORDER BY startedAtEpochMilli DESC
         LIMIT 1
@@ -102,6 +134,14 @@ interface GymWorkoutDao {
 
     @Query("DELETE FROM gym_workout_exercises WHERE workoutId = :workoutId")
     suspend fun deleteExercisesForWorkout(workoutId: Long)
+
+    @Query(
+        """
+        SELECT MIN(endedAtEpochMilli) FROM gym_workouts
+        WHERE status = :status AND endedAtEpochMilli IS NOT NULL
+        """,
+    )
+    suspend fun minCompletedEndedAt(status: String): Long?
 
     @Transaction
     suspend fun deleteWorkoutCascade(workoutId: Long) {

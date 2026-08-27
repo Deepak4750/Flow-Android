@@ -8,6 +8,17 @@ import java.time.LocalDate
 class HistoryGraphLogicTest {
 
     @Test
+    fun windowForMonth_dailyUsesWholeMonth() {
+        val window = HistoryGraphLogic.windowForMonth(
+            period = HistoryGraphPeriod.DAILY,
+            yearMonth = java.time.YearMonth.of(2026, 8),
+        )
+        assertEquals(java.time.LocalDate.of(2026, 8, 1).toEpochDay(), window.fromEpochDay)
+        assertEquals(java.time.LocalDate.of(2026, 8, 31).toEpochDay(), window.toEpochDay)
+        assertEquals("Aug 2026", window.title)
+    }
+
+    @Test
     fun dailyWindow_isSevenDaysEndingOnAnchor() {
         val window = HistoryGraphLogic.window(
             period = HistoryGraphPeriod.DAILY,

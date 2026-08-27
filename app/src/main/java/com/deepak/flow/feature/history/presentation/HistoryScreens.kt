@@ -25,7 +25,21 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import kotlinx.coroutines.withTimeoutOrNull
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.pointerInput
+import com.deepak.flow.app.theme.FlowTextSecondary
+import com.deepak.flow.core.history.HistoryCompletionDotLevel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,14 +62,36 @@ import com.deepak.flow.app.theme.FlowAccent
 import com.deepak.flow.app.theme.FlowBorder
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.app.theme.FlowTextPrimary
-import com.deepak.flow.app.theme.FlowTextSecondary
 import com.deepak.flow.app.theme.FlowTextTertiary
 import com.deepak.flow.app.theme.FlowWaterFill
 import com.deepak.flow.core.history.HistoryGraphPeriod
 import com.deepak.flow.core.history.HistorySeriesPoint
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
+import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
+
+private const val DAILY_VISIBLE_COLUMNS = 7.5f
+private val dailyWeekdayLetterFormatter =
+    DateTimeFormatter.ofPattern("EEEEE", Locale.getDefault())
+
+private fun dailyDayNumber(epochDay: Long): String =
+    LocalDate.ofEpochDay(epochDay).dayOfMonth.toString()
+
+private fun dailyWeekdayLetter(epochDay: Long): String =
+    LocalDate.ofEpochDay(epochDay).format(dailyWeekdayLetterFormatter)
 
 @Composable
 fun HistoryScreen(
@@ -63,8 +99,10 @@ fun HistoryScreen(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onDayClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
@@ -76,8 +114,10 @@ fun HistoryScreen(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         modifier = modifier,
     ) {
@@ -93,7 +133,12 @@ fun HistoryScreen(
                 HistoryMonthCalendar(
                     yearMonth = uiState.calendar.yearMonth,
                     activityDays = uiState.calendar.activityDays,
+                    completionDots = uiState.calendar.completionDots,
                     todayEpochDay = uiState.calendar.todayEpochDay,
+                    earliestEpochDay = uiState.calendar.earliestEpochDay,
+                    latestEpochDay = uiState.calendar.latestEpochDay,
+                    canGoPreviousMonth = uiState.calendar.canGoPreviousMonth,
+                    canGoNextMonth = uiState.calendar.canGoNextMonth,
                     onPreviousMonth = viewModel::goToPreviousMonth,
                     onNextMonth = viewModel::goToNextMonth,
                     onDayClick = onDayClick,
@@ -183,6 +228,7 @@ private fun HistoryGraphsPane(
                 icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                 contentDescription = "Previous period",
                 onClick = onPrevious,
+                enabled = state.canGoBack,
             )
             Text(
                 text = state.windowTitle,
@@ -204,15 +250,27 @@ private fun HistoryGraphsPane(
             totalLabel = formatHistoryGraphWaterTotal(state.points),
             points = state.points,
             valueOf = { it.waterBarValue() },
+            valueLabel = ::formatHistoryGraphWaterPoint,
             barColor = FlowWaterFill,
+            isDailyScrollable = state.period == HistoryGraphPeriod.DAILY,
         )
-        Spacer(modifier = Modifier.height(FlowSpacing.xl))
+        Spacer(
+            modifier = Modifier.height(
+                if (state.period == HistoryGraphPeriod.DAILY) {
+                    FlowSpacing.xxl + FlowSpacing.lg
+                } else {
+                    FlowSpacing.xl
+                },
+            ),
+        )
         HistoryBarChartCard(
             title = "Tasks",
             totalLabel = formatHistoryGraphTaskTotal(state.points),
             points = state.points,
             valueOf = { it.tasksBarValue() },
+            valueLabel = ::formatHistoryGraphTaskPoint,
             barColor = FlowAccent,
+            isDailyScrollable = state.period == HistoryGraphPeriod.DAILY,
         )
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
     }
@@ -224,7 +282,9 @@ private fun HistoryBarChartCard(
     totalLabel: String,
     points: List<HistorySeriesPoint>,
     valueOf: (HistorySeriesPoint) -> Float,
+    valueLabel: (HistorySeriesPoint) -> String,
     barColor: Color,
+    isDailyScrollable: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val maxValue = points.maxOfOrNull(valueOf)?.coerceAtLeast(1f) ?: 1f
@@ -239,46 +299,212 @@ private fun HistoryBarChartCard(
         Spacer(modifier = Modifier.height(FlowSpacing.md))
         if (points.all { valueOf(it) <= 0f }) {
             FlowSupportingText("Nothing logged in this window.")
+        } else if (isDailyScrollable) {
+            HistoryDailyScrollableBarChart(
+                points = points,
+                maxValue = maxValue,
+                valueOf = valueOf,
+                valueLabel = valueLabel,
+                barColor = barColor,
+            )
         } else {
+            HistoryFixedWidthBarChart(
+                points = points,
+                maxValue = maxValue,
+                valueOf = valueOf,
+                valueLabel = valueLabel,
+                barColor = barColor,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HistoryFixedWidthBarChart(
+    points: List<HistorySeriesPoint>,
+    maxValue: Float,
+    valueOf: (HistorySeriesPoint) -> Float,
+    valueLabel: (HistorySeriesPoint) -> String,
+    barColor: Color,
+) {
+    var tooltipIndex by remember { mutableStateOf<Int?>(null) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(168.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        points.forEachIndexed { index, point ->
+            val fraction = (valueOf(point) / maxValue).coerceIn(0f, 1f)
+            val showTooltip = tooltipIndex == index
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    if (showTooltip) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(horizontal = 2.dp),
+                        ) {
+                            Text(
+                                text = point.label.uppercase(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = FlowTextSecondary,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = valueLabel(point),
+                                style = MaterialTheme.typography.titleSmall,
+                                color = FlowTextPrimary,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+                HistoryGraphBarCanvas(
+                    fraction = fraction,
+                    barColor = barColor,
+                    barWidthFraction = 0.91f,
+                    gestureKey = index,
+                    onLongPressSelect = {
+                        tooltipIndex = index
+                    },
+                    onLongPressRelease = {
+                        tooltipIndex = null
+                    },
+                )
+                Spacer(modifier = Modifier.height(FlowSpacing.xs))
+                Text(
+                    text = point.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = FlowTextTertiary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryDailyScrollableBarChart(
+    points: List<HistorySeriesPoint>,
+    maxValue: Float,
+    valueOf: (HistorySeriesPoint) -> Float,
+    valueLabel: (HistorySeriesPoint) -> String,
+    barColor: Color,
+) {
+    val scrollState = rememberScrollState()
+    var tooltipIndex by remember { mutableStateOf<Int?>(null) }
+    var chartWidthPx by remember { mutableStateOf(0f) }
+    var viewportCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val barCanvasCoords = remember { mutableStateMapOf<Int, LayoutCoordinates>() }
+    val scrollOffset = scrollState.value
+
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val columnWidth = maxWidth / DAILY_VISIBLE_COLUMNS
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(168.dp)
+                .onGloballyPositioned { coords ->
+                    chartWidthPx = coords.size.width.toFloat()
+                    viewportCoords = coords
+                },
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .height(168.dp)
+                    .horizontalScroll(scrollState),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                points.forEach { point ->
+                points.forEachIndexed { index, point ->
                     val fraction = (valueOf(point) / maxValue).coerceIn(0f, 1f)
                     Column(
                         modifier = Modifier
-                            .weight(1f)
+                            .width(columnWidth)
                             .fillMaxHeight(),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Bottom,
                     ) {
-                        Canvas(
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .weight(1f),
+                                .height(120.dp)
+                                .onGloballyPositioned { coords ->
+                                    barCanvasCoords[index] = coords
+                                },
                         ) {
-                            val barWidth = size.width * 0.62f
-                            val barHeight = size.height * fraction
-                            val left = (size.width - barWidth) / 2f
-                            val top = size.height - barHeight
-                            drawRoundRect(
-                                color = if (fraction > 0f) barColor else FlowBorder,
-                                topLeft = Offset(left, top),
-                                size = Size(barWidth, barHeight.coerceAtLeast(2.dp.toPx())),
-                                cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+                            HistoryGraphBarCanvas(
+                                fraction = fraction,
+                                barColor = barColor,
+                                barWidthFraction = 0.78f,
+                                gestureKey = index,
+                                onLongPressSelect = {
+                                    tooltipIndex = index
+                                },
+                                onLongPressRelease = {
+                                    tooltipIndex = null
+                                },
                             )
                         }
                         Spacer(modifier = Modifier.height(FlowSpacing.xs))
                         Text(
-                            text = point.label,
-                            style = MaterialTheme.typography.labelSmall,
+                            text = dailyDayNumber(point.startEpochDay),
+                            style = MaterialTheme.typography.labelMedium,
                             color = FlowTextTertiary,
                             textAlign = TextAlign.Center,
                             maxLines = 1,
+                        )
+                        Text(
+                            text = dailyWeekdayLetter(point.startEpochDay),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = FlowTextTertiary,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+
+            val selectedIndex = tooltipIndex
+            if (selectedIndex != null && selectedIndex in points.indices) {
+                val point = points[selectedIndex]
+                val canvasCoords = barCanvasCoords[selectedIndex]
+                val viewport = viewportCoords
+                if (
+                    canvasCoords != null &&
+                    viewport != null &&
+                    canvasCoords.isAttached &&
+                    viewport.isAttached &&
+                    chartWidthPx > 0f
+                ) {
+                    val barTopLeft = viewport.localPositionOf(canvasCoords, Offset.Zero)
+                    val barCenterX = barTopLeft.x + canvasCoords.size.width / 2f
+                    val fraction = (valueOf(point) / maxValue).coerceIn(0f, 1f)
+                    val actualBarTopY = barTopLeft.y +
+                        canvasCoords.size.height * (1f - fraction)
+                    key(selectedIndex, scrollOffset) {
+                        HistoryDailyGraphTooltip(
+                            weekdayLabel = point.label.uppercase(Locale.getDefault()),
+                            valueText = valueLabel(point),
+                            barCenterX = barCenterX,
+                            barTopY = actualBarTopY,
+                            containerWidthPx = chartWidthPx,
                         )
                     }
                 }
@@ -288,10 +514,117 @@ private fun HistoryBarChartCard(
 }
 
 @Composable
+private fun HistoryDailyGraphTooltip(
+    weekdayLabel: String,
+    valueText: String,
+    barCenterX: Float,
+    barTopY: Float,
+    containerWidthPx: Float,
+) {
+    val density = LocalDensity.current
+    val gapPx = with(density) { 16.dp.toPx() }
+    val edgePaddingPx = with(density) { 8.dp.toPx() }
+
+    Layout(
+        modifier = Modifier.fillMaxSize(),
+        content = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = weekdayLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = FlowTextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
+                )
+                Text(
+                    text = valueText,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = FlowTextPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
+                )
+            }
+        },
+    ) { measurables, constraints ->
+        val placeable = measurables.first().measure(
+            Constraints(
+                minWidth = 0,
+                maxWidth = Constraints.Infinity,
+                minHeight = 0,
+                maxHeight = constraints.maxHeight,
+            ),
+        )
+        val offsetX = if (containerWidthPx <= 0f) {
+            0
+        } else {
+            val ideal = barCenterX - placeable.width / 2f
+            ideal.coerceIn(
+                edgePaddingPx,
+                containerWidthPx - placeable.width - edgePaddingPx,
+            ).roundToInt()
+        }
+        val offsetY = (barTopY - placeable.height - gapPx).roundToInt()
+
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            placeable.place(offsetX, offsetY)
+        }
+    }
+}
+
+@Composable
+private fun HistoryGraphBarCanvas(
+    fraction: Float,
+    barColor: Color,
+    barWidthFraction: Float,
+    gestureKey: Any,
+    onLongPressSelect: () -> Unit,
+    onLongPressRelease: () -> Unit,
+) {
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp)
+            .pointerInput(gestureKey) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    val upBeforeLongPress = withTimeoutOrNull(
+                        viewConfiguration.longPressTimeoutMillis,
+                    ) {
+                        waitForUpOrCancellation()
+                    }
+                    if (upBeforeLongPress == null) {
+                        onLongPressSelect()
+                        waitForUpOrCancellation()
+                        onLongPressRelease()
+                    }
+                }
+            },
+    ) {
+        val barWidth = size.width * barWidthFraction
+        val barHeight = size.height * fraction
+        val left = (size.width - barWidth) / 2f
+        val top = size.height - barHeight
+        drawRoundRect(
+            color = if (fraction > 0f) barColor else FlowBorder,
+            topLeft = Offset(left, top),
+            size = Size(barWidth, barHeight.coerceAtLeast(2.dp.toPx())),
+            cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+        )
+    }
+}
+
+@Composable
 private fun HistoryMonthCalendar(
     yearMonth: YearMonth,
     activityDays: Set<Long>,
+    completionDots: Map<Long, HistoryCompletionDotLevel>,
     todayEpochDay: Long,
+    earliestEpochDay: Long?,
+    latestEpochDay: Long?,
+    canGoPreviousMonth: Boolean,
+    canGoNextMonth: Boolean,
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onDayClick: (Long) -> Unit,
@@ -314,6 +647,7 @@ private fun HistoryMonthCalendar(
                 icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                 contentDescription = "Previous month",
                 onClick = onPreviousMonth,
+                enabled = canGoPreviousMonth,
             )
             Text(
                 text = title,
@@ -324,6 +658,7 @@ private fun HistoryMonthCalendar(
                 icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = "Next month",
                 onClick = onNextMonth,
+                enabled = canGoNextMonth,
             )
         }
         Spacer(modifier = Modifier.height(FlowSpacing.md))
@@ -348,11 +683,19 @@ private fun HistoryMonthCalendar(
                     val dayNumber = cellIndex - leadingEmpty + 1
                     if (dayNumber in 1..daysInMonth) {
                         val epochDay = yearMonth.atDay(dayNumber).toEpochDay()
+                        val isSelectable = epochDay == todayEpochDay ||
+                            (
+                                (earliestEpochDay == null || epochDay >= earliestEpochDay) &&
+                                    (latestEpochDay == null || epochDay <= latestEpochDay) &&
+                                    epochDay <= todayEpochDay
+                                )
                         HistoryDayCell(
                             dayNumber = dayNumber,
                             isToday = epochDay == todayEpochDay,
-                            hasActivity = epochDay in activityDays,
-                            onClick = { onDayClick(epochDay) },
+                            isFuture = epochDay > todayEpochDay,
+                            dotLevel = completionDots[epochDay] ?: HistoryCompletionDotLevel.NONE,
+                            enabled = isSelectable,
+                            onClick = { if (isSelectable) onDayClick(epochDay) },
                             modifier = Modifier.weight(1f),
                         )
                     } else {
@@ -368,15 +711,37 @@ private fun HistoryMonthCalendar(
 private fun HistoryDayCell(
     dayNumber: Int,
     isToday: Boolean,
-    hasActivity: Boolean,
+    isFuture: Boolean,
+    dotLevel: HistoryCompletionDotLevel,
+    enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isActive = enabled || isToday
+    val effectiveDotLevel = if (isFuture || !isActive) {
+        HistoryCompletionDotLevel.NONE
+    } else {
+        dotLevel
+    }
+    val dotColor = when (effectiveDotLevel) {
+        HistoryCompletionDotLevel.NONE -> Color.Transparent
+        HistoryCompletionDotLevel.RED -> Color(0xFFE05555)
+        HistoryCompletionDotLevel.NEUTRAL -> FlowTextSecondary
+        HistoryCompletionDotLevel.YELLOW -> Color(0xFFE6C84A)
+        HistoryCompletionDotLevel.BLUE -> Color(0xFF5B8FD4)
+        HistoryCompletionDotLevel.GREEN -> Color(0xFF5BB56B)
+    }
     Column(
         modifier = modifier
             .aspectRatio(1f)
             .clip(MaterialTheme.shapes.small)
-            .clickable(role = Role.Button, onClick = onClick)
+            .then(
+                if (isActive) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            )
             .padding(FlowSpacing.xxs),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -387,7 +752,7 @@ private fun HistoryDayCell(
                 .clip(CircleShape)
                 .then(
                     if (isToday) {
-                        Modifier.border(1.dp, FlowAccent, CircleShape)
+                        Modifier.border(1.5.dp, FlowTextSecondary, CircleShape)
                     } else {
                         Modifier
                     },
@@ -397,7 +762,11 @@ private fun HistoryDayCell(
             Text(
                 text = dayNumber.toString(),
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (isToday) FlowAccent else FlowTextPrimary,
+                color = when {
+                    isToday -> FlowTextPrimary
+                    !isActive -> FlowTextTertiary.copy(alpha = 0.4f)
+                    else -> FlowTextPrimary
+                },
             )
         }
         Spacer(modifier = Modifier.height(2.dp))
@@ -405,7 +774,7 @@ private fun HistoryDayCell(
             modifier = Modifier
                 .size(4.dp)
                 .clip(CircleShape)
-                .background(if (hasActivity) FlowTextSecondary else Color.Transparent),
+                .background(dotColor),
         )
     }
 }
@@ -416,12 +785,15 @@ fun HistoryDayScreen(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onBack: () -> Unit,
     onTasksClick: () -> Unit,
     onWaterClick: () -> Unit,
+    onGymClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -431,8 +803,10 @@ fun HistoryDayScreen(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         onBack = onBack,
         modifier = modifier,
@@ -449,6 +823,12 @@ fun HistoryDayScreen(
             title = "Water",
             subtitle = uiState.waterSubtitle,
             onClick = onWaterClick,
+        )
+        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        HistoryCategoryRow(
+            title = "Gym",
+            subtitle = uiState.gymSubtitle,
+            onClick = onGymClick,
         )
     }
 }
@@ -483,8 +863,10 @@ fun HistoryTasksDetailScreen(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -496,8 +878,10 @@ fun HistoryTasksDetailScreen(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         onBack = onBack,
         modifier = modifier,
@@ -519,8 +903,10 @@ fun HistoryWaterDetailScreen(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -532,8 +918,10 @@ fun HistoryWaterDetailScreen(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         onBack = onBack,
         modifier = modifier,
@@ -568,14 +956,16 @@ fun HistoryWaterDetailScreen(
 }
 
 @Composable
-private fun HistoryDetailShell(
+internal fun HistoryDetailShell(
     title: String,
     dateLabel: String,
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -586,8 +976,10 @@ private fun HistoryDetailShell(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         onBack = onBack,
         modifier = modifier,

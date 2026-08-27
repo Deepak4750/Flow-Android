@@ -59,4 +59,7 @@ interface HistoryDao {
         """,
     )
     fun observeTaskCountsInRange(fromEpochDay: Long, toEpochDay: Long): Flow<List<HistoryTaskCountRow>>
+
+    @Query("SELECT MIN(dateEpochDay) FROM reminder_day_completions")
+    suspend fun minTaskActivityDay(): Long?
 }

@@ -29,6 +29,7 @@ class BootReceiver : BroadcastReceiver() {
                     app.reminderRepository.cancelAllScheduledReminders()
                 }
                 app.notificationScheduler.syncWaterReminder(app.profileRepository.getProfile())
+                app.activeWorkoutNotificationController.restoreIfActive()
                 com.deepak.flow.core.widget.FlowWidgets.refresh(app)
             } finally {
                 pendingResult.finish()

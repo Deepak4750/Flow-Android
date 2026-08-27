@@ -42,6 +42,14 @@
     <string name="notification_water_add_250">250 ml</string>
     <string name="notification_water_add_500">500 ml</string>
     <string name="notification_water_dismiss">Dismiss</string>
+    <string name="notification_workout_in_progress">WORKOUT IN PROGRESS</string>
+    <string name="notification_channel_gym">Gym</string>
+    <string name="notification_channel_gym_description">Active Free Workout status</string>
+    <string name="notification_channel_gym_events">Gym alerts</string>
+    <string name="notification_channel_gym_events_description">Rest complete and other Gym alerts</string>
+    <string name="notification_rest_complete_title">REST COMPLETE</string>
+    <string name="notification_rest_complete_body">Get back to your workout.</string>
+    <string name="notification_rest_complete_action">Back to workout</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -59,6 +67,14 @@
     <string name="settings_label_snooze">For how long</string>
     <string name="settings_unit_minutes">min</string>
     <string name="settings_snooze_value_description">snooze interval</string>
+    <string name="settings_section_gym">Gym</string>
+    <string name="settings_gym_supporting">Defaults for Free Workout. Changing these does not rewrite past sets.</string>
+    <string name="settings_label_weight_unit">Weight Unit</string>
+    <string name="settings_label_set_rest">Set Rest</string>
+    <string name="settings_label_exercise_rest">Exercise Rest</string>
+    <string name="settings_unit_seconds">sec</string>
+    <string name="settings_set_rest_value_description">set rest seconds</string>
+    <string name="settings_exercise_rest_value_description">exercise rest seconds</string>
     <string name="settings_section_data">Data</string>
     <string name="settings_data_supporting">Everything stays on this device.</string>
     <string name="settings_label_keep_data">Keep data</string>

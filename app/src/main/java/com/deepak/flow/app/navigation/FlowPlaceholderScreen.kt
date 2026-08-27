@@ -9,8 +9,10 @@ fun FlowPlaceholderScreen(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -19,8 +21,10 @@ fun FlowPlaceholderScreen(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         modifier = modifier,
     ) {

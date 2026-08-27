@@ -30,7 +30,7 @@ enum class GymWorkoutStatus {
 object GymLimits {
     const val NOTE_MAX_CHARS = 200
     const val SET_REST_MIN_SECONDS = 10
-    const val SET_REST_MAX_SECONDS = 120
+    const val SET_REST_MAX_SECONDS = 300
     const val SET_REST_DEFAULT_SECONDS = 90
     const val EXERCISE_REST_MIN_SECONDS = 10
     const val EXERCISE_REST_MAX_SECONDS = 150
@@ -44,4 +44,4 @@ object GymLimits {
     fun clampExerciseRestSeconds(seconds: Int): Int =
         seconds.coerceIn(EXERCISE_REST_MIN_SECONDS, EXERCISE_REST_MAX_SECONDS)
 }
-
+

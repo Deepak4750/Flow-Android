@@ -41,6 +41,7 @@ import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.components.FlowToggleRow
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.app.theme.FlowTextTertiary
+import com.deepak.flow.core.gym.GymLimits
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.update.AppUpdateViewModel
 import com.deepak.flow.core.update.formatInstalledVersionLabel
@@ -169,6 +170,29 @@ fun SettingsScreen(
                     )
                 }
             }
+
+            FlowSectionBreak()
+            FlowFieldHeading(
+                label = stringResource(R.string.settings_section_gym),
+                supporting = stringResource(R.string.settings_gym_supporting),
+            )
+            FlowSelectorRow(
+                label = stringResource(R.string.settings_label_weight_unit),
+                value = uiState.gymWeightUnit.label,
+                onClick = viewModel::cycleGymWeightUnit,
+            )
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowStepper(
+                label = stringResource(R.string.settings_label_set_rest),
+                value = uiState.gymSetRestSeconds,
+                unitLabel = stringResource(R.string.settings_unit_seconds),
+                valueDescription = stringResource(R.string.settings_set_rest_value_description),
+                onValueChange = viewModel::onGymSetRestInput,
+                onIncrement = viewModel::incrementGymSetRest,
+                onDecrement = viewModel::decrementGymSetRest,
+                min = GymLimits.SET_REST_MIN_SECONDS,
+                max = GymLimits.SET_REST_MAX_SECONDS,
+            )
 
             FlowSectionBreak()
             FlowFieldHeading(

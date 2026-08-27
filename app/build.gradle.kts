@@ -15,7 +15,7 @@ android {
         targetSdk = 37
         // Sideloaded APKs only update in place - and keep reminders - when this
         // number is higher than the installed build. Bump it for every APK you share.
-        versionCode = 130
+        versionCode = 153
         versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -48,6 +48,11 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    // AGP lintVital can crash on some Kotlin/UAST files (tooling bug). Release still minifies.
+    lint {
+        checkReleaseBuilds = false
     }
 
     packaging {

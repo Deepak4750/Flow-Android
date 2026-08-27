@@ -11,6 +11,7 @@ import com.deepak.flow.core.model.parseWaterBottleStyleIndex
 import com.deepak.flow.core.model.WaterIntakeWrite
 import com.deepak.flow.core.model.encodeWaterAddLog
 import com.deepak.flow.core.model.encodeWaterCustomQuickAdds
+import com.deepak.flow.core.gym.GymLimits
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -98,6 +99,58 @@ class ProfileRepositoryImpl(
                 nickname = existing?.nickname,
                 onboardingCompleted = existing?.onboardingCompleted ?: true,
                 waterEnabled = enabled,
+            ),
+        )
+    }
+
+    override suspend fun updateGymEnabled(enabled: Boolean) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                gymEnabled = enabled,
+            ),
+        )
+    }
+
+    override suspend fun updateGymWeightUnit(unit: String) {
+        val normalized = when (unit.uppercase()) {
+            "LB" -> "LB"
+            else -> "KG"
+        }
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                gymWeightUnit = normalized,
+            ),
+        )
+    }
+
+    override suspend fun updateGymSetRestSeconds(seconds: Int) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                gymSetRestSeconds = GymLimits.clampSetRestSeconds(seconds),
+            ),
+        )
+    }
+
+    override suspend fun updateGymExerciseRestSeconds(seconds: Int) {
+        val existing = dao.getProfile()
+        dao.upsert(
+            existing.toUpsertEntity(
+                displayName = existing?.displayName,
+                nickname = existing?.nickname,
+                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                gymExerciseRestSeconds = GymLimits.clampExerciseRestSeconds(seconds),
             ),
         )
     }
@@ -281,6 +334,11 @@ private fun UserProfileEntity?.toUpsertEntity(
         ?: SnoozeSettings.DEFAULT_INTERVAL_MINUTES,
     remindersEnabled: Boolean = this?.remindersEnabled ?: UserProfile.DEFAULT_REMINDERS_ENABLED,
     waterEnabled: Boolean = this?.waterEnabled ?: UserProfile.DEFAULT_WATER_ENABLED,
+    gymEnabled: Boolean = this?.gymEnabled ?: UserProfile.DEFAULT_GYM_ENABLED,
+    gymWeightUnit: String = this?.gymWeightUnit ?: UserProfile.DEFAULT_GYM_WEIGHT_UNIT,
+    gymSetRestSeconds: Int = this?.gymSetRestSeconds ?: UserProfile.DEFAULT_GYM_SET_REST_SECONDS,
+    gymExerciseRestSeconds: Int = this?.gymExerciseRestSeconds
+        ?: UserProfile.DEFAULT_GYM_EXERCISE_REST_SECONDS,
     waterGoalMl: Int? = this?.waterGoalMl,
     waterBottleStyleIndex: Int? = this?.waterBottleStyleIndex,
     waterIntakeMl: Int = this?.waterIntakeMl ?: 0,
@@ -307,6 +365,10 @@ private fun UserProfileEntity?.toUpsertEntity(
     snoozeIntervalMinutes = snoozeIntervalMinutes,
     remindersEnabled = remindersEnabled,
     waterEnabled = waterEnabled,
+    gymEnabled = gymEnabled,
+    gymWeightUnit = gymWeightUnit,
+    gymSetRestSeconds = gymSetRestSeconds,
+    gymExerciseRestSeconds = gymExerciseRestSeconds,
     waterGoalMl = waterGoalMl,
     waterBottleStyleIndex = waterBottleStyleIndex,
     waterIntakeMl = waterIntakeMl,
@@ -329,6 +391,10 @@ private fun UserProfileEntity.toDomain() = UserProfile(
     snoozeIntervalMinutes = snoozeIntervalMinutes,
     remindersEnabled = remindersEnabled,
     waterEnabled = waterEnabled,
+    gymEnabled = gymEnabled,
+    gymWeightUnit = gymWeightUnit,
+    gymSetRestSeconds = gymSetRestSeconds,
+    gymExerciseRestSeconds = gymExerciseRestSeconds,
     waterGoalMl = waterGoalMl,
     waterBottleStyleIndex = waterBottleStyleIndex,
     waterIntakeMl = waterIntakeMl,

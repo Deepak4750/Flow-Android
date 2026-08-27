@@ -2,19 +2,31 @@ package com.deepak.flow.feature.gym.presentation
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.MaterialTheme
@@ -24,14 +36,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.Locale
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowButtonVariant
 import com.deepak.flow.app.components.FlowChip
@@ -46,25 +67,33 @@ import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowShell
 import com.deepak.flow.app.theme.FlowAccent
+import com.deepak.flow.app.theme.FlowMotion
+import com.deepak.flow.app.theme.FlowSizes
 import com.deepak.flow.app.theme.FlowSpacing
+import com.deepak.flow.app.theme.FlowSurfaceRaised
+import com.deepak.flow.app.theme.FlowTextDisabled
 import com.deepak.flow.app.theme.FlowTextPrimary
 import com.deepak.flow.app.theme.FlowTextSecondary
 import com.deepak.flow.app.theme.FlowTextTertiary
+import com.deepak.flow.app.theme.FlowWhite
 import com.deepak.flow.core.gym.GymLimits
 import com.deepak.flow.core.gym.GymLogic
 import com.deepak.flow.core.gym.GymWorkoutExercise
 import com.deepak.flow.core.gym.GymWorkoutSet
 import com.deepak.flow.core.gym.TrackingField
 import com.deepak.flow.core.gym.WeightUnit
-import androidx.compose.ui.text.input.KeyboardType
+import kotlinx.coroutines.delay
+
 @Composable
 fun FreeWorkoutScreen(
     viewModel: FreeWorkoutViewModel,
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onLeave: () -> Unit,
     modifier: Modifier = Modifier,
@@ -80,16 +109,15 @@ fun FreeWorkoutScreen(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         onBack = {
             when (uiState.phase) {
-                FreeWorkoutPhase.ADD_EXERCISE,
-                FreeWorkoutPhase.EDIT_EXERCISE,
-                -> viewModel.cancelExerciseEditor()
-                FreeWorkoutPhase.EDIT_SET -> viewModel.cancelSetEditor()
-                FreeWorkoutPhase.ASK_REST -> viewModel.skipRest()
+                FreeWorkoutPhase.SETUP -> onLeave()
+                FreeWorkoutPhase.EDIT_EXERCISE -> viewModel.cancelExerciseEditor()
                 FreeWorkoutPhase.RESTING -> viewModel.skipRest()
                 FreeWorkoutPhase.END_OPTIONS -> viewModel.dismissEndOptions()
                 FreeWorkoutPhase.COMPLETED -> viewModel.finishAndLeave()
@@ -99,6 +127,13 @@ fun FreeWorkoutScreen(
         modifier = modifier,
     ) {
         when {
+            uiState.phase == FreeWorkoutPhase.SETUP && uiState.workoutId == null -> {
+                FreeWorkoutSetupPane(
+                    title = uiState.setupTitle,
+                    onTitleChange = viewModel::onSetupTitleChange,
+                    onStart = viewModel::startWorkoutFromSetup,
+                )
+            }
             uiState.loading -> {
                 FlowScreenTitle("Free Workout")
                 Spacer(modifier = Modifier.height(FlowSpacing.lg))
@@ -113,56 +148,29 @@ fun FreeWorkoutScreen(
             uiState.phase == FreeWorkoutPhase.RESTING -> {
                 RestPane(
                     remainingLabel = uiState.restRemainingLabel,
-                    upNext = uiState.upNextLabel,
-                    exercise = uiState.upNextExercise,
-                    weightUnit = uiState.session?.weightUnit ?: WeightUnit.KG,
+                    exercise = uiState.currentExercise,
+                    weightUnit = uiState.displayWeightUnit,
                     onSkip = viewModel::skipRest,
+                    onMinusTen = { viewModel.addRestSeconds(-10) },
                     onAddTen = { viewModel.addRestSeconds(10) },
-                    onFinish = viewModel::skipRest,
                 )
             }
-            uiState.phase == FreeWorkoutPhase.ASK_REST -> {
-                AskRestPane(
-                    seconds = uiState.restSecondsChoice,
-                    onSecondsChange = viewModel::chooseRestSeconds,
-                    onRest = viewModel::confirmRest,
-                    onSkip = viewModel::skipRest,
-                )
-            }
-            uiState.phase == FreeWorkoutPhase.ADD_EXERCISE ||
-                uiState.phase == FreeWorkoutPhase.EDIT_EXERCISE -> {
+            uiState.phase == FreeWorkoutPhase.EDIT_EXERCISE -> {
                 ExerciseEditorPane(
                     draft = uiState.exerciseDraft,
-                    isEdit = uiState.phase == FreeWorkoutPhase.EDIT_EXERCISE,
                     message = uiState.message,
                     onNameChange = viewModel::onExerciseNameChange,
                     onNoteChange = viewModel::onExerciseNoteChange,
                     onToggleField = viewModel::toggleTrackingField,
-                    onSave = viewModel::saveExercise,
+                    onToggleFieldsEditor = viewModel::toggleShowFieldsEditor,
+                    onToggleNoteEditor = viewModel::toggleShowNoteEditor,
+                    onSave = viewModel::saveExerciseEdits,
                     onCancel = viewModel::cancelExerciseEditor,
                     onDelete = {
                         uiState.exerciseDraft.editingExerciseId?.let(viewModel::deleteExercise)
                     },
                     onClearMessage = viewModel::clearMessage,
                 )
-            }
-            uiState.phase == FreeWorkoutPhase.EDIT_SET -> {
-                val exercise = uiState.currentExercise
-                if (exercise != null) {
-                    SetEditorPane(
-                        exercise = exercise,
-                        draft = uiState.setDraft,
-                        weightUnit = uiState.session?.weightUnit ?: WeightUnit.KG,
-                        message = uiState.message,
-                        onDraftChange = viewModel::onSetDraftChange,
-                        onSave = viewModel::saveSet,
-                        onCancel = viewModel::cancelSetEditor,
-                        onDelete = {
-                            uiState.setDraft.setId?.let(viewModel::deleteSet)
-                        },
-                        onClearMessage = viewModel::clearMessage,
-                    )
-                }
             }
             uiState.phase == FreeWorkoutPhase.END_OPTIONS -> {
                 EndOptionsPane(
@@ -175,36 +183,38 @@ fun FreeWorkoutScreen(
             else -> {
                 SessionPane(
                     uiState = uiState,
-                    onAddExercise = viewModel::openAddExercise,
+                    onFinishExercise = viewModel::finishExercise,
+                    onAddNewSet = viewModel::addNewSet,
                     onEditExercise = viewModel::openEditExercise,
                     onSelectExercise = viewModel::selectExercise,
-                    onWeightUnit = viewModel::setWeightUnit,
-                    onNewSet = viewModel::openNewSet,
+                    onDraftChange = viewModel::onSetDraftChange,
+                    onSaveSet = viewModel::saveSet,
                     onEditSet = viewModel::openEditSet,
+                    onClearEditingSet = viewModel::clearEditingSet,
+                    onDeleteSet = viewModel::deleteSet,
+                    onComposeNameChange = viewModel::onExerciseNameChange,
+                    onComposeNoteChange = viewModel::onExerciseNoteChange,
+                    onToggleComposeFields = viewModel::toggleShowFieldsEditor,
+                    onToggleComposeNote = viewModel::toggleShowNoteEditor,
+                    onToggleField = viewModel::toggleTrackingField,
+                    onStepWeight = viewModel::stepWeight,
+                    onStepReps = viewModel::stepReps,
+                    onStepIncline = viewModel::stepIncline,
+                    onStepResistance = viewModel::stepResistance,
+                    onStepRounds = viewModel::stepRounds,
                     onEnd = viewModel::openEndOptions,
+                    onClearMessage = viewModel::clearMessage,
+                    onUndoDeleteSet = viewModel::undoDeleteSet,
+                    onDismissSetRemovedUndo = viewModel::dismissSetRemovedUndo,
+                    onUndoDeleteExercise = viewModel::undoDeleteExercise,
+                    onDismissExerciseRemovedUndo = viewModel::dismissExerciseRemovedUndo,
                 )
             }
         }
 
         when (uiState.confirm) {
-            FreeWorkoutConfirm.DELETE_EXERCISE -> FlowDialog(
-                title = "Delete exercise?",
-                message = "This removes it from the current workout only.",
-                confirmText = "Delete",
-                dismissText = "Cancel",
-                onConfirm = viewModel::confirmPendingAction,
-                onDismiss = viewModel::dismissConfirm,
-                destructive = true,
-            )
-            FreeWorkoutConfirm.DELETE_SET -> FlowDialog(
-                title = "Delete set?",
-                message = "This set will be removed from the current workout.",
-                confirmText = "Delete",
-                dismissText = "Cancel",
-                onConfirm = viewModel::confirmPendingAction,
-                onDismiss = viewModel::dismissConfirm,
-                destructive = true,
-            )
+            FreeWorkoutConfirm.DELETE_EXERCISE -> Unit
+            FreeWorkoutConfirm.DELETE_SET -> Unit
             FreeWorkoutConfirm.DISCARD_WORKOUT -> FlowDialog(
                 title = "Discard workout?",
                 message = "This throws away the current session. Past workouts stay.",
@@ -222,248 +232,834 @@ fun FreeWorkoutScreen(
 @Composable
 private fun SessionPane(
     uiState: FreeWorkoutUiState,
-    onAddExercise: () -> Unit,
+    onFinishExercise: () -> Unit,
+    onAddNewSet: () -> Unit,
     onEditExercise: (GymWorkoutExercise) -> Unit,
     onSelectExercise: (Int) -> Unit,
-    onWeightUnit: (WeightUnit) -> Unit,
-    onNewSet: () -> Unit,
-    onEditSet: (GymWorkoutSet) -> Unit,
+    onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
+    onSaveSet: () -> Unit,
+    onEditSet: (GymWorkoutExercise, GymWorkoutSet) -> Unit,
+    onClearEditingSet: () -> Unit,
+    onDeleteSet: (Long) -> Unit,
+    onComposeNameChange: (String) -> Unit,
+    onComposeNoteChange: (String) -> Unit,
+    onToggleComposeFields: () -> Unit,
+    onToggleComposeNote: () -> Unit,
+    onToggleField: (TrackingField) -> Unit,
+    onStepWeight: (Boolean) -> Unit,
+    onStepReps: (Boolean) -> Unit,
+    onStepIncline: (Boolean) -> Unit,
+    onStepResistance: (Boolean) -> Unit,
+    onStepRounds: (Boolean) -> Unit,
     onEnd: () -> Unit,
+    onClearMessage: () -> Unit,
+    onUndoDeleteSet: () -> Unit,
+    onDismissSetRemovedUndo: () -> Unit,
+    onUndoDeleteExercise: () -> Unit,
+    onDismissExerciseRemovedUndo: () -> Unit,
 ) {
     val session = uiState.session
-    val exercise = uiState.currentExercise
+    val weightUnit = uiState.displayWeightUnit
+    val currentIndex = session?.currentExerciseIndex ?: 0
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        FlowScreenTitle("Free Workout")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        Text(
-            text = uiState.stopwatchLabel,
-            style = MaterialTheme.typography.headlineMedium,
-            color = FlowTextPrimary,
+    LaunchedEffect(uiState.message) {
+        if (uiState.message != null) delayMessageClear(onClearMessage)
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        WorkoutPinnedHeader(
+            workoutHeading = uiState.workoutHeading,
+            stopwatchLabel = uiState.stopwatchLabel,
+            onEnd = onEnd,
         )
-        Spacer(modifier = Modifier.height(FlowSpacing.md))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FlowMetaText("Unit")
-            WeightUnit.entries.forEach { unit ->
-                FlowChip(
-                    label = unit.label,
-                    selected = session?.weightUnit == unit,
-                    onClick = { onWeightUnit(unit) },
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            FlowTextAction(text = "End", onClick = onEnd)
-        }
-
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
         FlowHairlineDivider()
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
 
-        if (session == null || session.exercises.isEmpty()) {
-            FlowSupportingText("Add an exercise to start logging.")
-            Spacer(modifier = Modifier.height(FlowSpacing.xl))
-            FlowButton(
-                text = "Add Exercise",
-                onClick = onAddExercise,
-                leadingIcon = Icons.Default.Add,
-            )
-            return@Column
-        }
-
-        if (session.exercises.size > 1) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm),
-            ) {
-                session.exercises.forEachIndexed { index, item ->
-                    FlowChip(
-                        label = item.name,
-                        selected = index == session.currentExerciseIndex,
-                        onClick = { onSelectExercise(index) },
+        val exercises = session?.exercises.orEmpty()
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+        ) {
+            itemsIndexed(
+                items = exercises,
+                key = { _, exercise -> exercise.id },
+            ) { index, exercise ->
+                val isActive = !uiState.composingExercise && index == currentIndex
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    ExerciseBlock(
+                        exercise = exercise,
+                        isActive = isActive,
+                        weightUnit = weightUnit,
+                        setDraft = uiState.setDraft,
+                        setEditorVisible = isActive && uiState.setEditorVisible,
+                        awaitingNextAction = isActive && uiState.awaitingNextAction,
+                        canSaveSet = uiState.canSaveSet,
+                        message = uiState.message.takeIf { isActive },
+                        onSelect = { onSelectExercise(index) },
+                        onEditExercise = { onEditExercise(exercise) },
+                        onEditSet = { set -> onEditSet(exercise, set) },
+                        onDraftChange = onDraftChange,
+                        onSaveSet = onSaveSet,
+                        onClearEditingSet = onClearEditingSet,
+                        onDeleteSet = onDeleteSet,
+                        onAddNewSet = onAddNewSet,
+                        onFinishExercise = onFinishExercise,
+                        onStepWeight = onStepWeight,
+                        onStepReps = onStepReps,
+                        onStepIncline = onStepIncline,
+                        onStepResistance = onStepResistance,
+                        onStepRounds = onStepRounds,
+                    )
+                    if (index < exercises.lastIndex || uiState.composingExercise) {
+                        Spacer(modifier = Modifier.height(FlowSpacing.xl))
+                        FlowHairlineDivider()
+                        Spacer(modifier = Modifier.height(FlowSpacing.xl))
+                    }
+                }
+            }
+            if (uiState.composingExercise) {
+                item(key = "composer") {
+                    InlineExerciseComposer(
+                        draft = uiState.exerciseDraft,
+                        setDraft = uiState.setDraft,
+                        weightUnit = weightUnit,
+                        setEditorVisible = uiState.setEditorVisible,
+                        canSaveSet = uiState.canSaveSet,
+                        message = uiState.message,
+                        onNameChange = onComposeNameChange,
+                        onNoteChange = onComposeNoteChange,
+                        onToggleFields = onToggleComposeFields,
+                        onToggleNote = onToggleComposeNote,
+                        onToggleField = onToggleField,
+                        onDraftChange = onDraftChange,
+                        onSaveSet = onSaveSet,
+                        onStepWeight = onStepWeight,
+                        onStepReps = onStepReps,
+                        onStepIncline = onStepIncline,
+                        onStepResistance = onStepResistance,
+                        onStepRounds = onStepRounds,
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
         }
 
-        if (exercise != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = exercise.name.uppercase(),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = FlowTextPrimary,
-                    modifier = Modifier.weight(1f),
-                )
-                FlowTextAction(text = "Edit", onClick = { onEditExercise(exercise) })
-            }
-            if (exercise.note.isNotBlank()) {
-                Spacer(modifier = Modifier.height(FlowSpacing.sm))
-                NoteWithLinks(note = exercise.note)
-            }
-            Spacer(modifier = Modifier.height(FlowSpacing.md))
-            FlowSectionLabel("Sets")
-            Spacer(modifier = Modifier.height(FlowSpacing.sm))
-            val savedSets = exercise.sets.filter { it.saved }
-            if (savedSets.isEmpty()) {
-                FlowSupportingText("No sets yet.")
-            } else {
-                savedSets.forEach { set ->
-                    SetRow(
-                        set = set,
-                        fields = exercise.trackingFields,
-                        weightUnit = session.weightUnit,
-                        onClick = { onEditSet(set) },
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(FlowSpacing.xl))
-            FlowButton(
-                text = "Save Set",
-                onClick = onNewSet,
+        if (uiState.setRemovedUndoVisible) {
+            SetRemovedUndoBanner(
+                onUndo = onUndoDeleteSet,
+                onDismiss = onDismissSetRemovedUndo,
             )
-            Spacer(modifier = Modifier.height(FlowSpacing.sm))
-            FlowButton(
-                text = "Add Exercise",
-                onClick = onAddExercise,
-                variant = FlowButtonVariant.Secondary,
-                leadingIcon = Icons.Default.Add,
+        }
+        if (uiState.exerciseRemovedUndoVisible) {
+            ExerciseRemovedUndoBanner(
+                onUndo = onUndoDeleteExercise,
+                onDismiss = onDismissExerciseRemovedUndo,
             )
         }
     }
 }
 
 @Composable
-private fun SetRow(
-    set: GymWorkoutSet,
-    fields: Set<TrackingField>,
-    weightUnit: WeightUnit,
-    onClick: () -> Unit,
+private fun FreeWorkoutSetupPane(
+    title: String,
+    onTitleChange: (String) -> Unit,
+    onStart: () -> Unit,
+) {
+    FlowScreenTitle("Free Workout")
+    Spacer(modifier = Modifier.height(FlowSpacing.xl))
+    FlowTextField(
+        value = title,
+        onValueChange = onTitleChange,
+        placeholder = "Workout title",
+        singleLine = true,
+    )
+    Spacer(modifier = Modifier.height(FlowSpacing.xl))
+    FlowButton(text = "Start Workout", onClick = onStart)
+}
+
+@Composable
+private fun WorkoutPinnedHeader(
+    workoutHeading: String,
+    stopwatchLabel: String,
+    onEnd: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(vertical = FlowSpacing.sm),
+            .background(MaterialTheme.colorScheme.background),
     ) {
-        Text(
-            text = "Set ${set.setNumber}",
-            style = MaterialTheme.typography.labelLarge,
-            color = FlowTextSecondary,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                FlowScreenTitle(
+                    text = workoutHeading.uppercase(Locale.getDefault()),
+                    maxLines = 1,
+                )
+                Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+                Text(
+                    text = stopwatchLabel,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = FlowTextPrimary,
+                )
+            }
+            FlowTextAction(text = "End", onClick = onEnd)
+        }
+    }
+}
+
+@Composable
+private fun InlineExerciseComposer(
+    draft: ExerciseDraft,
+    setDraft: SetDraft,
+    weightUnit: WeightUnit,
+    setEditorVisible: Boolean,
+    canSaveSet: Boolean,
+    message: String?,
+    onNameChange: (String) -> Unit,
+    onNoteChange: (String) -> Unit,
+    onToggleFields: () -> Unit,
+    onToggleNote: () -> Unit,
+    onToggleField: (TrackingField) -> Unit,
+    onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
+    onSaveSet: () -> Unit,
+    onStepWeight: (Boolean) -> Unit,
+    onStepReps: (Boolean) -> Unit,
+    onStepIncline: (Boolean) -> Unit,
+    onStepResistance: (Boolean) -> Unit,
+    onStepRounds: (Boolean) -> Unit,
+) {
+    FlowTextField(
+        value = draft.name,
+        onValueChange = onNameChange,
+        placeholder = "Exercise title",
+    )
+    Spacer(modifier = Modifier.height(FlowSpacing.md))
+    FlowMetaText(trackingSummary(draft.fields))
+    Spacer(modifier = Modifier.height(FlowSpacing.xs))
+    FlowTextAction(
+        text = if (draft.showFieldsEditor) "Hide Fields" else "Edit Fields",
+        onClick = onToggleFields,
+    )
+    if (draft.showFieldsEditor) {
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        TrackingFieldChips(fields = draft.fields, onToggle = onToggleField)
+    }
+    Spacer(modifier = Modifier.height(FlowSpacing.sm))
+    NoteToggle(
+        expanded = draft.showNoteEditor,
+        onToggle = onToggleNote,
+    )
+    if (draft.showNoteEditor) {
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        FlowTextField(
+            value = draft.note,
+            onValueChange = onNoteChange,
+            placeholder = "Your note...",
+            singleLine = false,
+            minLines = 2,
         )
-        Spacer(modifier = Modifier.height(2.dp))
+        FlowMetaText("${draft.note.length}/${GymLimits.NOTE_MAX_CHARS}")
+    }
+
+    if (setEditorVisible) {
+        Spacer(modifier = Modifier.height(FlowSpacing.lg))
+        InlineSetEditor(
+            draft = setDraft,
+            fields = draft.fields,
+            weightUnit = weightUnit,
+            onDraftChange = onDraftChange,
+            onStepWeight = onStepWeight,
+            onStepReps = onStepReps,
+            onStepIncline = onStepIncline,
+            onStepResistance = onStepResistance,
+            onStepRounds = onStepRounds,
+        )
+        if (message != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowSupportingText(message)
+        }
+        Spacer(modifier = Modifier.height(FlowSpacing.lg))
+        FlowButton(
+            text = "Save Set",
+            onClick = onSaveSet,
+            enabled = canSaveSet,
+        )
+    }
+}
+
+@Composable
+private fun ExerciseBlock(
+    exercise: GymWorkoutExercise,
+    isActive: Boolean,
+    weightUnit: WeightUnit,
+    setDraft: SetDraft,
+    setEditorVisible: Boolean,
+    awaitingNextAction: Boolean,
+    canSaveSet: Boolean,
+    message: String?,
+    onSelect: () -> Unit,
+    onEditExercise: () -> Unit,
+    onEditSet: (GymWorkoutSet) -> Unit,
+    onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
+    onSaveSet: () -> Unit,
+    onClearEditingSet: () -> Unit,
+    onDeleteSet: (Long) -> Unit,
+    onAddNewSet: () -> Unit,
+    onFinishExercise: () -> Unit,
+    onStepWeight: (Boolean) -> Unit,
+    onStepReps: (Boolean) -> Unit,
+    onStepIncline: (Boolean) -> Unit,
+    onStepResistance: (Boolean) -> Unit,
+    onStepRounds: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isActive) {
+                    Modifier.clickable(role = Role.Button, onClick = onSelect)
+                } else {
+                    Modifier
+                },
+            ),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = exercise.name.uppercase(),
+                style = MaterialTheme.typography.titleLarge,
+                color = FlowTextPrimary,
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            FlowMetaText(trackingSummary(exercise.trackingFields))
+        }
+        FlowTextAction(text = "Edit", onClick = onEditExercise)
+    }
+
+    if (exercise.note.isNotBlank()) {
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        NoteWithLinks(note = exercise.note)
+    }
+
+    Spacer(modifier = Modifier.height(FlowSpacing.md))
+    val savedSets = exercise.sets.filter { it.saved }
+    savedSets.forEach { set ->
+        SavedSetRow(
+            set = set,
+            fields = exercise.trackingFields,
+            weightUnit = weightUnit,
+            selected = isActive && setDraft.setId == set.id,
+            canDelete = isActive,
+            onClick = if (isActive) {
+                {
+                    onSelect()
+                    onEditSet(set)
+                }
+            } else {
+                {}
+            },
+            onDelete = if (isActive) {
+                { onDeleteSet(set.id) }
+            } else {
+                null
+            },
+            clickable = isActive,
+        )
+    }
+
+    if (isActive && setEditorVisible) {
+        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        InlineSetEditor(
+            draft = setDraft,
+            fields = exercise.trackingFields,
+            weightUnit = weightUnit,
+            onDraftChange = onDraftChange,
+            onStepWeight = onStepWeight,
+            onStepReps = onStepReps,
+            onStepIncline = onStepIncline,
+            onStepResistance = onStepResistance,
+            onStepRounds = onStepRounds,
+        )
+        if (message != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowSupportingText(message)
+        }
+        Spacer(modifier = Modifier.height(FlowSpacing.lg))
+        FlowButton(
+            text = "Save Set",
+            onClick = onSaveSet,
+            enabled = canSaveSet,
+        )
+        if (setDraft.setId != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowTextAction(text = "Cancel edit", onClick = onClearEditingSet)
+        }
+    }
+
+    if (isActive && awaitingNextAction) {
+        Spacer(modifier = Modifier.height(FlowSpacing.lg))
+        FlowButton(
+            text = "Add New Set",
+            onClick = onAddNewSet,
+            leadingIcon = Icons.Default.Add,
+        )
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        FlowButton(
+            text = "Save Exercise",
+            onClick = onFinishExercise,
+            variant = FlowButtonVariant.Secondary,
+        )
+    }
+}
+
+@Composable
+private fun SavedSetRow(
+    set: GymWorkoutSet,
+    fields: Set<TrackingField>,
+    weightUnit: WeightUnit,
+    selected: Boolean,
+    onClick: () -> Unit,
+    clickable: Boolean = true,
+    canDelete: Boolean = false,
+    onDelete: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = FlowSpacing.sm),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f),
+        ) {
+            if (canDelete && onDelete != null) {
+                Text(
+                    text = "−",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = FlowTextSecondary,
+                    modifier = Modifier
+                        .clickable(role = Role.Button, onClick = onDelete)
+                        .padding(end = FlowSpacing.sm),
+                )
+            }
+            Text(
+                text = "SET ${set.setNumber}",
+                style = MaterialTheme.typography.labelLarge,
+                color = if (selected) FlowTextPrimary else FlowTextSecondary,
+                modifier = Modifier.then(
+                    if (clickable) {
+                        Modifier.clickable(role = Role.Button, onClick = onClick)
+                    } else {
+                        Modifier
+                    },
+                ),
+            )
+        }
         Text(
             text = GymLogic.formatSetSummary(set, fields, weightUnit),
             style = MaterialTheme.typography.titleMedium,
             color = FlowTextPrimary,
+            modifier = Modifier.then(
+                if (clickable) {
+                    Modifier.clickable(role = Role.Button, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            ),
         )
-        FlowHairlineDivider(modifier = Modifier.padding(top = FlowSpacing.sm))
+    }
+    FlowHairlineDivider()
+}
+
+@Composable
+private fun ExerciseRemovedUndoBanner(
+    onUndo: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(FlowSurfaceRaised)
+            .padding(horizontal = FlowSpacing.md, vertical = FlowSpacing.sm),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Exercise removed",
+            style = MaterialTheme.typography.bodyMedium,
+            color = FlowTextPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        FlowTextAction(text = "Undo", onClick = onUndo)
+        Spacer(modifier = Modifier.width(FlowSpacing.sm))
+        FlowTextAction(text = "Dismiss", onClick = onDismiss)
+    }
+}
+
+@Composable
+private fun SetRemovedUndoBanner(
+    onUndo: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(FlowSurfaceRaised)
+            .padding(horizontal = FlowSpacing.md, vertical = FlowSpacing.sm),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "Set removed",
+            style = MaterialTheme.typography.bodyMedium,
+            color = FlowTextPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        FlowTextAction(text = "Undo", onClick = onUndo)
+        Spacer(modifier = Modifier.width(FlowSpacing.sm))
+        FlowTextAction(text = "Dismiss", onClick = onDismiss)
+    }
+}
+
+@Composable
+private fun InlineSetEditor(
+    draft: SetDraft,
+    fields: Set<TrackingField>,
+    weightUnit: WeightUnit,
+    onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
+    onStepWeight: (Boolean) -> Unit,
+    onStepReps: (Boolean) -> Unit,
+    onStepIncline: (Boolean) -> Unit,
+    onStepResistance: (Boolean) -> Unit,
+    onStepRounds: (Boolean) -> Unit,
+) {
+    FlowSectionLabel("SET ${draft.setNumber}")
+    Spacer(modifier = Modifier.height(FlowSpacing.sm))
+
+    val hasWeight = TrackingField.WEIGHT in fields
+    val hasReps = TrackingField.REPS in fields
+    if (hasWeight || hasReps) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (hasWeight) {
+                    SteppedNumberField(
+                        value = draft.weight,
+                        onValueChange = { value ->
+                            onDraftChange { it.copy(weight = filterDecimal(value)) }
+                        },
+                        onMinus = { onStepWeight(false) },
+                        onPlus = { onStepWeight(true) },
+                        suffix = weightUnit.label.lowercase(),
+                        keyboardType = KeyboardType.Decimal,
+                        inputWidth = 64.dp,
+                    )
+                }
+            }
+            if (hasWeight && hasReps) {
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "×",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = FlowTextSecondary,
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (hasReps) {
+                    SteppedNumberField(
+                        value = draft.reps,
+                        onValueChange = { value ->
+                            onDraftChange { it.copy(reps = filterInt(value)) }
+                        },
+                        onMinus = { onStepReps(false) },
+                        onPlus = { onStepReps(true) },
+                        suffix = "reps",
+                        keyboardType = KeyboardType.Number,
+                        inputWidth = 48.dp,
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+    }
+
+    fields.filterNot { it == TrackingField.WEIGHT || it == TrackingField.REPS }.forEach { field ->
+        when (field) {
+            TrackingField.DURATION -> {
+                Row(horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm)) {
+                    CompactNumberField(
+                        value = draft.durationMinutes,
+                        onValueChange = { value ->
+                            onDraftChange { it.copy(durationMinutes = filterInt(value)) }
+                        },
+                        placeholder = "min",
+                        suffix = "min",
+                        keyboardType = KeyboardType.Number,
+                        inputWidth = 64.dp,
+                    )
+                    CompactNumberField(
+                        value = draft.durationSeconds,
+                        onValueChange = { value ->
+                            onDraftChange { it.copy(durationSeconds = filterDurationSeconds(value)) }
+                        },
+                        placeholder = "sec",
+                        suffix = "sec",
+                        keyboardType = KeyboardType.Number,
+                        inputWidth = 56.dp,
+                    )
+                }
+            }
+            TrackingField.DISTANCE -> CompactNumberField(
+                value = draft.distance,
+                onValueChange = { value ->
+                    onDraftChange { it.copy(distance = filterDecimal(value)) }
+                },
+                placeholder = "0",
+                suffix = "km",
+                keyboardType = KeyboardType.Decimal,
+                inputWidth = 72.dp,
+            )
+            TrackingField.SPEED -> CompactNumberField(
+                value = draft.speed,
+                onValueChange = { value ->
+                    onDraftChange { it.copy(speed = filterDecimal(value)) }
+                },
+                placeholder = "0",
+                suffix = "km/h",
+                keyboardType = KeyboardType.Decimal,
+                inputWidth = 72.dp,
+            )
+            TrackingField.INCLINE -> {
+                FlowSectionLabel("Incline")
+                Spacer(modifier = Modifier.height(FlowSpacing.xs))
+                SteppedNumberField(
+                    value = draft.incline,
+                    onValueChange = { value ->
+                        onDraftChange { it.copy(incline = filterInt(value)) }
+                    },
+                    onMinus = { onStepIncline(false) },
+                    onPlus = { onStepIncline(true) },
+                    suffix = null,
+                    keyboardType = KeyboardType.Number,
+                    inputWidth = 56.dp,
+                )
+            }
+            TrackingField.RESISTANCE -> {
+                FlowSectionLabel("Resistance")
+                Spacer(modifier = Modifier.height(FlowSpacing.xs))
+                SteppedNumberField(
+                    value = draft.resistance,
+                    onValueChange = { value ->
+                        onDraftChange { it.copy(resistance = filterInt(value)) }
+                    },
+                    onMinus = { onStepResistance(false) },
+                    onPlus = { onStepResistance(true) },
+                    suffix = null,
+                    keyboardType = KeyboardType.Number,
+                    inputWidth = 56.dp,
+                )
+            }
+            TrackingField.ROUNDS -> {
+                FlowSectionLabel("Rounds")
+                Spacer(modifier = Modifier.height(FlowSpacing.xs))
+                SteppedNumberField(
+                    value = draft.rounds,
+                    onValueChange = { value ->
+                        onDraftChange { it.copy(rounds = filterInt(value)) }
+                    },
+                    onMinus = { onStepRounds(false) },
+                    onPlus = { onStepRounds(true) },
+                    suffix = null,
+                    keyboardType = KeyboardType.Number,
+                    inputWidth = 56.dp,
+                )
+            }
+            TrackingField.WEIGHT, TrackingField.REPS -> Unit
+        }
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(
+                role = Role.Checkbox,
+                onClick = { onDraftChange { it.copy(failure = !it.failure) } },
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm),
+    ) {
+        Text(
+            text = if (draft.failure) "●" else "○",
+            style = MaterialTheme.typography.titleMedium,
+            color = FlowTextPrimary,
+        )
+        Text(
+            text = "HIT FAILURE",
+            style = MaterialTheme.typography.bodyLarge,
+            color = FlowTextPrimary,
+        )
+    }
+}
+
+@Composable
+private fun SteppedNumberField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    onMinus: () -> Unit,
+    onPlus: () -> Unit,
+    suffix: String?,
+    keyboardType: KeyboardType,
+    inputWidth: Dp,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xxs),
+    ) {
+        FlowTextAction(text = "−", onClick = onMinus)
+        CompactValueField(
+            value = value,
+            onValueChange = onValueChange,
+            keyboardType = keyboardType,
+            width = inputWidth,
+        )
+        FlowTextAction(text = "+", onClick = onPlus)
+        if (!suffix.isNullOrBlank()) {
+            Text(
+                text = suffix,
+                style = MaterialTheme.typography.titleMedium,
+                color = FlowTextSecondary,
+                modifier = Modifier.padding(start = FlowSpacing.xxs),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactNumberField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    suffix: String,
+    keyboardType: KeyboardType,
+    inputWidth: Dp,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xxs),
+    ) {
+        CompactValueField(
+            value = value,
+            onValueChange = onValueChange,
+            keyboardType = keyboardType,
+            width = inputWidth,
+            placeholder = placeholder,
+        )
+        Text(
+            text = suffix,
+            style = MaterialTheme.typography.labelLarge,
+            color = FlowTextSecondary,
+        )
+    }
+}
+
+@Composable
+private fun CompactValueField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType,
+    width: Dp,
+    placeholder: String = "0",
+) {
+    val fieldStyle = MaterialTheme.typography.titleLarge.copy(
+        color = FlowTextPrimary,
+        textAlign = TextAlign.Center,
+    )
+    Column(
+        modifier = Modifier
+            .width(width)
+            .widthIn(min = 48.dp, max = 96.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = FlowSizes.touchTarget),
+            textStyle = fieldStyle,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            cursorBrush = SolidColor(FlowWhite),
+            decorationBox = { inner ->
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            style = fieldStyle.copy(color = FlowTextDisabled),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+        FlowHairlineDivider()
+    }
+}
+
+@Composable
+private fun TrackingFieldChips(
+    fields: Set<TrackingField>,
+    onToggle: (TrackingField) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
+    ) {
+        TrackingField.entries.forEach { field ->
+            FlowChip(
+                label = field.label,
+                selected = field in fields,
+                onClick = { onToggle(field) },
+            )
+        }
     }
 }
 
 @Composable
 private fun ExerciseEditorPane(
     draft: ExerciseDraft,
-    isEdit: Boolean,
     message: String?,
     onNameChange: (String) -> Unit,
     onNoteChange: (String) -> Unit,
     onToggleField: (TrackingField) -> Unit,
-    onSave: () -> Unit,
-    onCancel: () -> Unit,
-    onDelete: () -> Unit,
-    onClearMessage: () -> Unit,
-) {
-    LaunchedEffect(message) {
-        if (message != null) {
-            delayMessageClear(onClearMessage)
-        }
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        FlowScreenTitle(if (isEdit) "Edit Exercise" else "Add Exercise")
-        Spacer(modifier = Modifier.height(FlowSpacing.lg))
-        FlowSectionLabel("Name")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        FlowTextField(
-            value = draft.name,
-            onValueChange = onNameChange,
-            placeholder = "Exercise name",
-        )
-        Spacer(modifier = Modifier.height(FlowSpacing.lg))
-        FlowSectionLabel("Track")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        FlowSupportingText("Pick at least one.")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        TrackingField.entries.chunked(2).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm),
-            ) {
-                row.forEach { field ->
-                    FlowChip(
-                        label = field.label,
-                        selected = field in draft.fields,
-                        onClick = { onToggleField(field) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (row.size == 1) {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-            }
-            Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        }
-        Spacer(modifier = Modifier.height(FlowSpacing.md))
-        FlowSectionLabel("Note")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        FlowTextField(
-            value = draft.note,
-            onValueChange = onNoteChange,
-            placeholder = "Optional · links work",
-            singleLine = false,
-            minLines = 3,
-        )
-        FlowMetaText("${draft.note.length}/${GymLimits.NOTE_MAX_CHARS}")
-        if (message != null) {
-            Spacer(modifier = Modifier.height(FlowSpacing.sm))
-            FlowSupportingText(message, color = FlowTextTertiary)
-        }
-        Spacer(modifier = Modifier.height(FlowSpacing.xl))
-        FlowButton(text = "Save", onClick = onSave)
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        FlowButton(
-            text = "Cancel",
-            onClick = onCancel,
-            variant = FlowButtonVariant.Secondary,
-        )
-        if (isEdit) {
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
-            FlowTextAction(text = "Delete Exercise", onClick = onDelete, destructive = true)
-        }
-    }
-}
-
-@Composable
-private fun SetEditorPane(
-    exercise: GymWorkoutExercise,
-    draft: SetDraft,
-    weightUnit: WeightUnit,
-    message: String?,
-    onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
+    onToggleFieldsEditor: () -> Unit,
+    onToggleNoteEditor: () -> Unit,
     onSave: () -> Unit,
     onCancel: () -> Unit,
     onDelete: () -> Unit,
@@ -477,267 +1073,197 @@ private fun SetEditorPane(
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
     ) {
-        FlowScreenTitle(exercise.name)
-        Spacer(modifier = Modifier.height(FlowSpacing.xs))
-        FlowSectionLabel("Set number")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        FlowScreenTitle("Edit Exercise")
+        Spacer(modifier = Modifier.height(FlowSpacing.lg))
         FlowTextField(
-            value = draft.setNumber.toString(),
-            onValueChange = { value ->
-                val number = filterInt(value).toIntOrNull()?.coerceAtLeast(1) ?: 1
-                onDraftChange { it.copy(setNumber = number) }
-            },
-            placeholder = "1",
-            keyboardType = KeyboardType.Number,
+            value = draft.name,
+            onValueChange = onNameChange,
+            placeholder = "Exercise title",
         )
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
-        exercise.trackingFields.forEach { field ->
-            when (field) {
-                TrackingField.WEIGHT -> {
-                    FlowSectionLabel("Weight (${weightUnit.label})")
-                    Spacer(modifier = Modifier.height(FlowSpacing.sm))
-                    FlowTextField(
-                        value = draft.weight,
-                        onValueChange = { value ->
-                            onDraftChange { it.copy(weight = filterDecimal(value)) }
-                        },
-                        placeholder = "0",
-                        keyboardType = KeyboardType.Decimal,
-                    )
-                }
-                TrackingField.REPS -> {
-                    FlowSectionLabel("Reps")
-                    Spacer(modifier = Modifier.height(FlowSpacing.sm))
-                    FlowTextField(
-                        value = draft.reps,
-                        onValueChange = { value ->
-                            onDraftChange { it.copy(reps = filterInt(value)) }
-                        },
-                        placeholder = "0",
-                        keyboardType = KeyboardType.Number,
-                    )
-                }
-                TrackingField.DURATION -> {
-                    FlowSectionLabel("Duration")
-                    Spacer(modifier = Modifier.height(FlowSpacing.sm))
-                    Row(horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm)) {
-                        FlowTextField(
-                            value = draft.durationMinutes,
-                            onValueChange = { value ->
-                                onDraftChange { it.copy(durationMinutes = filterInt(value)) }
-                            },
-                            placeholder = "min",
-                            keyboardType = KeyboardType.Number,
-                            modifier = Modifier.weight(1f),
-                        )
-                        FlowTextField(
-                            value = draft.durationSeconds,
-                            onValueChange = { value ->
-                                onDraftChange { it.copy(durationSeconds = filterInt(value)) }
-                            },
-                            placeholder = "sec",
-                            keyboardType = KeyboardType.Number,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-                TrackingField.DISTANCE -> NumberField(
-                    label = "Distance (km)",
-                    value = draft.distance,
-                    onValueChange = { value -> onDraftChange { it.copy(distance = value) } },
-                )
-                TrackingField.SPEED -> NumberField(
-                    label = "Speed (km/h)",
-                    value = draft.speed,
-                    onValueChange = { value -> onDraftChange { it.copy(speed = value) } },
-                )
-                TrackingField.INCLINE -> NumberField(
-                    label = "Incline",
-                    value = draft.incline,
-                    onValueChange = { value -> onDraftChange { it.copy(incline = value) } },
-                )
-                TrackingField.RESISTANCE -> NumberField(
-                    label = "Resistance",
-                    value = draft.resistance,
-                    onValueChange = { value -> onDraftChange { it.copy(resistance = value) } },
-                )
-                TrackingField.ROUNDS -> {
-                    FlowSectionLabel("Rounds")
-                    Spacer(modifier = Modifier.height(FlowSpacing.sm))
-                    FlowTextField(
-                        value = draft.rounds,
-                        onValueChange = { value ->
-                            onDraftChange { it.copy(rounds = filterInt(value)) }
-                        },
-                        placeholder = "0",
-                        keyboardType = KeyboardType.Number,
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(FlowSpacing.md))
+        FlowSectionLabel("Tracking")
+        Spacer(modifier = Modifier.height(FlowSpacing.xs))
+        FlowSupportingText(trackingSummary(draft.fields))
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        FlowTextAction(
+            text = if (draft.showFieldsEditor) "Hide Fields" else "Edit Fields",
+            onClick = onToggleFieldsEditor,
+        )
+        if (draft.showFieldsEditor) {
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowSupportingText("At least one field stays on.")
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            TrackingFieldChips(fields = draft.fields, onToggle = onToggleField)
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .clickable(
-                    role = Role.Checkbox,
-                    onClick = { onDraftChange { it.copy(failure = !it.failure) } },
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = "Failure",
-                style = MaterialTheme.typography.bodyLarge,
-                color = FlowTextPrimary,
+
+        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        NoteToggle(
+            expanded = draft.showNoteEditor,
+            onToggle = onToggleNoteEditor,
+        )
+        if (draft.showNoteEditor) {
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowTextField(
+                value = draft.note,
+                onValueChange = onNoteChange,
+                placeholder = "Your note...",
+                singleLine = false,
+                minLines = 2,
             )
-            FlowMetaText(if (draft.failure) "On" else "Off")
+            FlowMetaText("${draft.note.length}/${GymLimits.NOTE_MAX_CHARS}")
         }
+
         if (message != null) {
             Spacer(modifier = Modifier.height(FlowSpacing.sm))
-            FlowSupportingText(message)
+            FlowSupportingText(message, color = FlowTextTertiary)
         }
         Spacer(modifier = Modifier.height(FlowSpacing.xl))
-        FlowButton(text = "Save Set", onClick = onSave)
+        FlowButton(text = "Save", onClick = onSave)
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
         FlowButton(
             text = "Cancel",
             onClick = onCancel,
             variant = FlowButtonVariant.Secondary,
         )
-        if (draft.setId != null) {
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
-            FlowTextAction(text = "Delete Set", onClick = onDelete, destructive = true)
-        }
-    }
-}
-
-@Composable
-private fun NumberField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-) {
-    FlowSectionLabel(label)
-    Spacer(modifier = Modifier.height(FlowSpacing.sm))
-    FlowTextField(
-        value = value,
-        onValueChange = { onValueChange(filterDecimal(it)) },
-        placeholder = "0",
-        keyboardType = KeyboardType.Decimal,
-    )
-}
-
-@Composable
-private fun AskRestPane(
-    seconds: Int,
-    onSecondsChange: (Int) -> Unit,
-    onRest: () -> Unit,
-    onSkip: () -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        FlowScreenTitle("Rest?")
-        Spacer(modifier = Modifier.height(FlowSpacing.md))
-        FlowSupportingText("$seconds seconds")
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm),
-        ) {
-            listOf(10, 30, 60, 90, 120).forEach { option ->
-                FlowChip(
-                    label = "${option}s",
-                    selected = seconds == option,
-                    onClick = { onSecondsChange(option) },
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(FlowSpacing.md))
-        Row(horizontalArrangement = Arrangement.spacedBy(FlowSpacing.sm)) {
-            FlowChip(
-                label = "-10s",
-                selected = false,
-                onClick = { onSecondsChange(seconds - 10) },
-            )
-            FlowChip(
-                label = "+10s",
-                selected = false,
-                onClick = { onSecondsChange(seconds + 10) },
-            )
-        }
-        Spacer(modifier = Modifier.height(FlowSpacing.xl))
-        FlowButton(text = "Rest", onClick = onRest)
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        FlowButton(
-            text = "Skip",
-            onClick = onSkip,
-            variant = FlowButtonVariant.Secondary,
-        )
+        FlowTextAction(text = "Delete Exercise", onClick = onDelete, destructive = true)
     }
 }
 
 @Composable
 private fun RestPane(
     remainingLabel: String,
-    upNext: String,
     exercise: GymWorkoutExercise?,
     weightUnit: WeightUnit,
     onSkip: () -> Unit,
+    onMinusTen: () -> Unit,
     onAddTen: () -> Unit,
-    onFinish: () -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .fillMaxHeight()
             .verticalScroll(rememberScrollState()),
     ) {
-        FlowSectionLabel("Rest")
-        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        FlowSectionLabel("Set Rest")
+        Spacer(modifier = Modifier.height(FlowSpacing.xl))
         Text(
             text = remainingLabel,
-            style = MaterialTheme.typography.displaySmall,
+            style = MaterialTheme.typography.displayLarge.copy(
+                fontSize = 72.sp,
+                lineHeight = 80.sp,
+            ),
             color = FlowTextPrimary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(modifier = Modifier.height(FlowSpacing.xxl))
-        FlowSectionLabel("Up next")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        Text(
-            text = upNext.uppercase(),
-            style = MaterialTheme.typography.headlineSmall,
-            color = FlowTextPrimary,
-        )
-        if (exercise != null) {
-            val saved = exercise.sets.filter { it.saved }
-            if (saved.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(FlowSpacing.sm))
-                saved.forEach { set ->
-                    Text(
-                        text = GymLogic.formatCompactSetLine(
-                            set,
-                            exercise.trackingFields,
-                            weightUnit,
-                        ),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = FlowTextSecondary,
-                    )
-                }
-            }
-            if (exercise.note.isNotBlank()) {
-                Spacer(modifier = Modifier.height(FlowSpacing.md))
-                NoteWithLinks(note = exercise.note)
-            }
+        Spacer(modifier = Modifier.height(FlowSpacing.xl))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(
+                space = FlowSpacing.md,
+                alignment = Alignment.CenterHorizontally,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FlowButton(
+                text = "−10",
+                onClick = onMinusTen,
+                variant = FlowButtonVariant.Secondary,
+                fillWidth = false,
+            )
+            FlowButton(
+                text = "Skip",
+                onClick = onSkip,
+                fillWidth = false,
+            )
+            FlowButton(
+                text = "+10",
+                onClick = onAddTen,
+                variant = FlowButtonVariant.Secondary,
+                fillWidth = false,
+            )
         }
         Spacer(modifier = Modifier.height(FlowSpacing.xxl))
-        FlowButton(text = "+10 seconds", onClick = onAddTen)
+        FlowHairlineDivider()
+        Spacer(modifier = Modifier.height(FlowSpacing.lg))
+        FlowSectionLabel("Current exercise")
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        FlowButton(
-            text = "Skip",
-            onClick = onSkip,
-            variant = FlowButtonVariant.Secondary,
+        if (exercise != null) {
+            Text(
+                text = exercise.name.uppercase(),
+                style = MaterialTheme.typography.headlineSmall,
+                color = FlowTextPrimary,
+            )
+            val saved = exercise.sets.filter { it.saved }
+            if (saved.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(FlowSpacing.md))
+                saved.forEach { set ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = FlowSpacing.xs),
+                    ) {
+                        FlowMetaText("Set ${set.setNumber}")
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = GymLogic.formatCompactSetLine(
+                                set,
+                                exercise.trackingFields,
+                                weightUnit,
+                            ),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = FlowTextPrimary,
+                        )
+                        if (set.failure) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            FlowMetaText("Failure")
+                        }
+                    }
+                }
+            }
+        } else {
+            FlowSupportingText("Continue")
+        }
+    }
+}
+
+@Composable
+private fun NoteToggle(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 45f else 0f,
+        animationSpec = tween(FlowMotion.STANDARD),
+        label = "noteToggleRotation",
+    )
+    val haptic = LocalHapticFeedback.current
+    Row(
+        modifier = Modifier
+            .heightIn(min = FlowSizes.touchTarget)
+            .clickable(
+                role = Role.Button,
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    onToggle()
+                },
+            )
+            .padding(vertical = FlowSpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xxs),
+    ) {
+        Text(
+            text = "+",
+            style = MaterialTheme.typography.labelLarge,
+            color = FlowTextPrimary,
+            modifier = Modifier.graphicsLayer { rotationZ = rotation },
         )
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        FlowTextAction(text = "Finish rest", onClick = onFinish)
+        Text(
+            text = "NOTE",
+            style = MaterialTheme.typography.labelLarge,
+            color = FlowTextPrimary,
+        )
     }
 }
 
@@ -753,10 +1279,10 @@ private fun EndOptionsPane(
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
         FlowSupportingText(stopwatchLabel)
         Spacer(modifier = Modifier.height(FlowSpacing.xl))
-        FlowButton(text = "Save Workout", onClick = onComplete)
+        FlowButton(text = "End & Save", onClick = onComplete)
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
         FlowButton(
-            text = "Keep Going",
+            text = "Cancel",
             onClick = onContinue,
             variant = FlowButtonVariant.Secondary,
         )
@@ -771,20 +1297,23 @@ private fun CompletionPane(
     onDone: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        FlowScreenTitle("Done")
+        FlowScreenTitle("Workout Complete")
         Spacer(modifier = Modifier.height(FlowSpacing.xl))
         if (summary != null) {
-            SummaryLine("Duration", GymLogic.formatSummaryDuration(summary.durationSeconds))
             SummaryLine(
-                "Exercises",
-                summary.exerciseCount.toString(),
+                label = "Duration",
+                value = GymLogic.formatSummaryDuration(summary.durationSeconds),
             )
-            SummaryLine("Sets", summary.setCount.toString())
-            GymLogic.formatVolumeKg(summary.volumeKg)?.let { volume ->
-                SummaryLine("Volume", volume)
+            SummaryLine(label = "Exercises", value = summary.exerciseCount.toString())
+            SummaryLine(label = "Sets", value = summary.setCount.toString())
+            summary.volumeKg?.let { volume ->
+                SummaryLine(
+                    label = "Volume",
+                    value = "${GymLogic.formatNumber(volume)} kg",
+                )
             }
         }
-        Spacer(modifier = Modifier.height(FlowSpacing.xxl))
+        Spacer(modifier = Modifier.height(FlowSpacing.xl))
         FlowButton(text = "Done", onClick = onDone)
     }
 }
@@ -794,42 +1323,47 @@ private fun SummaryLine(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = FlowSpacing.sm),
+            .padding(vertical = FlowSpacing.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(text = label, style = MaterialTheme.typography.bodyLarge, color = FlowTextSecondary)
-        Text(text = value, style = MaterialTheme.typography.titleMedium, color = FlowTextPrimary)
+        FlowMetaText(label)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            color = FlowTextPrimary,
+        )
     }
-    FlowHairlineDivider()
 }
 
 @Composable
 private fun NoteWithLinks(note: String) {
     val context = LocalContext.current
-    val links = GymLogic.findNoteLinks(note)
-    if (links.isEmpty()) {
+    val spans = GymLogic.findNoteLinks(note)
+    if (spans.isEmpty()) {
         FlowSupportingText(note)
         return
     }
     val annotated = buildAnnotatedString {
         var cursor = 0
-        links.forEach { link ->
-            if (cursor < link.start) {
-                append(note.substring(cursor, link.start))
+        spans.forEach { span ->
+            if (span.start > cursor) {
+                append(note.substring(cursor, span.start))
             }
-            pushStringAnnotation(tag = "URL", annotation = link.url)
+            pushStringAnnotation(tag = "URL", annotation = span.url)
             withStyle(
                 SpanStyle(
                     color = FlowAccent,
                     textDecoration = TextDecoration.Underline,
                 ),
             ) {
-                append(note.substring(link.start, link.end))
+                append(note.substring(span.start, span.end))
             }
             pop()
-            cursor = link.end
+            cursor = span.end
         }
-        if (cursor < note.length) append(note.substring(cursor))
+        if (cursor < note.length) {
+            append(note.substring(cursor))
+        }
     }
     ClickableText(
         text = annotated,
@@ -838,18 +1372,20 @@ private fun NoteWithLinks(note: String) {
             annotated.getStringAnnotations("URL", offset, offset)
                 .firstOrNull()
                 ?.let { annotation ->
-                    runCatching {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item)),
-                        )
-                    }
+                    val uri = Uri.parse(annotation.item)
+                    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                 }
         },
     )
 }
 
+private fun trackingSummary(fields: Set<TrackingField>): String {
+    if (fields.isEmpty()) return "Weight + Reps"
+    return fields.sortedBy { it.ordinal }.joinToString(" + ") { it.label }
+}
+
 private suspend fun delayMessageClear(onClear: () -> Unit) {
-    kotlinx.coroutines.delay(2_500)
+    delay(2_500)
     onClear()
 }
 
@@ -870,3 +1406,9 @@ private fun filterDecimal(raw: String): String {
 
 private fun filterInt(raw: String): String = raw.filter { it.isDigit() }
 
+private fun filterDurationSeconds(raw: String): String {
+    val digits = filterInt(raw)
+    if (digits.isEmpty()) return ""
+    val value = digits.toIntOrNull()?.coerceIn(0, 59) ?: return digits.take(2)
+    return value.toString()
+}

@@ -56,11 +56,12 @@ class FlowDrawerDestinationTest {
     }
 
     @Test
-    fun tasksAndWaterHaveFeatureToggles() {
+    fun tasksWaterAndGymHaveFeatureToggles() {
         assertEquals(
             listOf(
                 FlowDrawerDestination.REMINDERS,
                 FlowDrawerDestination.WATER,
+                FlowDrawerDestination.GYM,
             ),
             FlowDrawerDestination.entries.filter { it.isFeature },
         )
@@ -72,41 +73,61 @@ class FlowDrawerDestinationTest {
             FlowDrawerDestination.REMINDERS.isEnabled(
                 remindersEnabled = true,
                 waterEnabled = false,
+                gymEnabled = true,
             ),
         )
         assertFalse(
             FlowDrawerDestination.REMINDERS.isEnabled(
                 remindersEnabled = false,
                 waterEnabled = true,
+                gymEnabled = true,
             ),
         )
         assertTrue(
             FlowDrawerDestination.WATER.isEnabled(
                 remindersEnabled = false,
                 waterEnabled = true,
+                gymEnabled = true,
             ),
         )
         assertFalse(
             FlowDrawerDestination.WATER.isEnabled(
                 remindersEnabled = true,
                 waterEnabled = false,
+                gymEnabled = true,
+            ),
+        )
+        assertTrue(
+            FlowDrawerDestination.GYM.isEnabled(
+                remindersEnabled = false,
+                waterEnabled = false,
+                gymEnabled = true,
+            ),
+        )
+        assertFalse(
+            FlowDrawerDestination.GYM.isEnabled(
+                remindersEnabled = true,
+                waterEnabled = true,
+                gymEnabled = false,
             ),
         )
         assertTrue(
             FlowDrawerDestination.HOME.isEnabled(
                 remindersEnabled = false,
                 waterEnabled = false,
+                gymEnabled = false,
             ),
         )
     }
 
     @Test
-    fun switchValueExistsOnTasksAndWater() {
+    fun switchValueExistsOnTasksWaterAndGym() {
         assertEquals(
             true,
             FlowDrawerDestination.REMINDERS.featureChecked(
                 remindersEnabled = true,
                 waterEnabled = false,
+                gymEnabled = true,
             ),
         )
         assertEquals(
@@ -114,6 +135,7 @@ class FlowDrawerDestinationTest {
             FlowDrawerDestination.WATER.featureChecked(
                 remindersEnabled = true,
                 waterEnabled = false,
+                gymEnabled = true,
             ),
         )
         assertEquals(
@@ -121,24 +143,37 @@ class FlowDrawerDestinationTest {
             FlowDrawerDestination.WATER.featureChecked(
                 remindersEnabled = false,
                 waterEnabled = true,
+                gymEnabled = false,
             ),
         )
-        assertNull(
+        assertEquals(
+            true,
             FlowDrawerDestination.GYM.featureChecked(
                 remindersEnabled = true,
                 waterEnabled = true,
+                gymEnabled = true,
+            ),
+        )
+        assertEquals(
+            false,
+            FlowDrawerDestination.GYM.featureChecked(
+                remindersEnabled = true,
+                waterEnabled = true,
+                gymEnabled = false,
             ),
         )
         assertNull(
             FlowDrawerDestination.HISTORY.featureChecked(
                 remindersEnabled = true,
                 waterEnabled = true,
+                gymEnabled = true,
             ),
         )
         assertNull(
             FlowDrawerDestination.SETTINGS.featureChecked(
                 remindersEnabled = true,
                 waterEnabled = true,
+                gymEnabled = true,
             ),
         )
     }

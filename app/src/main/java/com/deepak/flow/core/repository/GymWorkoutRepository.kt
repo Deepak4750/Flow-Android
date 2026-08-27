@@ -2,6 +2,7 @@ package com.deepak.flow.core.repository
 
 import com.deepak.flow.core.gym.GymSetMeasurements
 import com.deepak.flow.core.gym.GymWorkoutSession
+import com.deepak.flow.core.gym.GymWorkoutSet
 import com.deepak.flow.core.gym.GymWorkoutType
 import com.deepak.flow.core.gym.TrackingField
 import com.deepak.flow.core.gym.WeightUnit
@@ -14,6 +15,15 @@ interface GymWorkoutRepository {
     fun observeActiveSession(type: GymWorkoutType): Flow<GymWorkoutSession?>
 
     fun observeSession(workoutId: Long): Flow<GymWorkoutSession?>
+
+    /**
+     * Completed workouts whose [GymWorkoutSession.endedAtEpochMilli] falls in
+     * [[fromInclusive], [toExclusive]). Newest first.
+     */
+    fun observeCompletedSessionsBetween(
+        fromInclusive: Long,
+        toExclusive: Long,
+    ): Flow<List<GymWorkoutSession>>
 
     suspend fun getActiveSession(type: GymWorkoutType): GymWorkoutSession?
 
@@ -60,6 +70,17 @@ interface GymWorkoutRepository {
 
     suspend fun deleteSet(setId: Long)
 
+    /**
+     * Re-inserts a deleted set at [setNumber], renumbering siblings around it.
+     * Used for short-lived Undo after removing a set mid-workout.
+     */
+    suspend fun restoreSet(
+        exerciseId: Long,
+        measurements: GymSetMeasurements,
+        failure: Boolean,
+        setNumber: Int,
+    ): Long
+
     suspend fun startRest(workoutId: Long, durationSeconds: Int, nowEpochMilli: Long = System.currentTimeMillis())
 
     /**
@@ -76,5 +97,25 @@ interface GymWorkoutRepository {
     suspend fun completeWorkout(workoutId: Long, nowEpochMilli: Long = System.currentTimeMillis())
 
     suspend fun discardWorkout(workoutId: Long)
+
+    suspend fun setWorkoutStarred(workoutId: Long, starred: Boolean)
+
+    suspend fun setWorkoutTitle(workoutId: Long, title: String)
+
+    fun displayWorkoutTitle(title: String): String =
+        title.trim().ifEmpty { "Free Workout" }
+
+    /**
+     * Re-inserts a deleted exercise with its sets at [sortOrder].
+     * Used for short-lived Undo after removing an exercise mid-workout.
+     */
+    suspend fun restoreExercise(
+        workoutId: Long,
+        sortOrder: Int,
+        name: String,
+        trackingFields: Set<TrackingField>,
+        note: String,
+        sets: List<GymWorkoutSet>,
+    ): Long
 }
 

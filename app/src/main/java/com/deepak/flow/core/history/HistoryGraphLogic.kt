@@ -19,12 +19,46 @@ data class HistoryGraphWindow(
     val title: String,
 )
 
+data class HistoryBounds(
+    val earliestEpochDay: Long? = null,
+    val latestEpochDay: Long? = null,
+)
+
 object HistoryGraphLogic {
     private val dayLabel = DateTimeFormatter.ofPattern("EEE", Locale.getDefault())
     private val dayTitle = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
     private val weekTitle = DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())
     private val monthLabel = DateTimeFormatter.ofPattern("MMM", Locale.getDefault())
     private val monthTitle = DateTimeFormatter.ofPattern("MMM yyyy", Locale.getDefault())
+
+    fun windowForMonth(
+        period: HistoryGraphPeriod,
+        yearMonth: YearMonth,
+    ): HistoryGraphWindow {
+        val monthStart = yearMonth.atDay(1)
+        val monthEnd = yearMonth.atEndOfMonth()
+        return when (period) {
+            HistoryGraphPeriod.DAILY -> HistoryGraphWindow(
+                fromEpochDay = monthStart.toEpochDay(),
+                toEpochDay = monthEnd.toEpochDay(),
+                title = monthStart.format(monthTitle),
+            )
+            HistoryGraphPeriod.WEEKLY -> {
+                val start = monthStart.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+                val end = monthEnd.with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY))
+                HistoryGraphWindow(
+                    fromEpochDay = start.toEpochDay(),
+                    toEpochDay = end.toEpochDay(),
+                    title = monthStart.format(monthTitle),
+                )
+            }
+            HistoryGraphPeriod.MONTHLY -> HistoryGraphWindow(
+                fromEpochDay = monthStart.toEpochDay(),
+                toEpochDay = monthEnd.toEpochDay(),
+                title = monthStart.format(monthTitle),
+            )
+        }
+    }
 
     fun window(
         period: HistoryGraphPeriod,

@@ -7,6 +7,7 @@ object WidgetLaunch {
     const val EXTRA_DESTINATION = "com.deepak.flow.widget.DESTINATION"
     const val DEST_WATER = "water"
     const val DEST_REMINDERS = "reminders"
+    const val DEST_GYM_FREE_WORKOUT = "gym_free_workout"
 }
 
 fun Intent.putWidgetDestination(destination: String): Intent =

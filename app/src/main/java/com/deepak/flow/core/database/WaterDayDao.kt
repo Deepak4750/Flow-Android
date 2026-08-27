@@ -34,4 +34,7 @@ interface WaterDayDao {
         """,
     )
     fun observeDaysInRange(fromEpochDay: Long, toEpochDay: Long): Flow<List<WaterDayEntity>>
+
+    @Query("SELECT MIN(dateEpochDay) FROM water_days WHERE intakeMl > 0")
+    suspend fun minActivityDay(): Long?
 }

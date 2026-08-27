@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.model.UserProfile
+import com.deepak.flow.core.gym.GymLimits
+import com.deepak.flow.core.gym.WeightUnit
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ReminderRepository
@@ -22,6 +24,9 @@ data class SettingsUiState(
     val savedNickname: String = "",
     val snoozeEnabled: Boolean = SnoozeSettings.DEFAULT_ENABLED,
     val snoozeIntervalMinutes: Int = SnoozeSettings.DEFAULT_INTERVAL_MINUTES,
+    val gymWeightUnit: WeightUnit = WeightUnit.KG,
+    val gymSetRestSeconds: Int = GymLimits.SET_REST_DEFAULT_SECONDS,
+    val gymExerciseRestSeconds: Int = GymLimits.EXERCISE_REST_DEFAULT_SECONDS,
     val reminderCount: Int = 0,
     val keepDataOnUninstall: Boolean = true,
     val isSaving: Boolean = false,
@@ -53,6 +58,16 @@ class SettingsViewModel(
                     val snooze = profile?.snoozeIntervalMinutes ?: SnoozeSettings.DEFAULT_INTERVAL_MINUTES
                     val keepData = profile?.keepDataOnUninstall
                         ?: UserProfile.DEFAULT_KEEP_DATA_ON_UNINSTALL
+                    val weightUnit = when (profile?.gymWeightUnit?.uppercase()) {
+                        "LB" -> WeightUnit.LB
+                        else -> WeightUnit.KG
+                    }
+                    val setRest = GymLimits.clampSetRestSeconds(
+                        profile?.gymSetRestSeconds ?: GymLimits.SET_REST_DEFAULT_SECONDS,
+                    )
+                    val exerciseRest = GymLimits.clampExerciseRestSeconds(
+                        profile?.gymExerciseRestSeconds ?: GymLimits.EXERCISE_REST_DEFAULT_SECONDS,
+                    )
                     // Never overwrite text the user is currently editing.
                     if (state.hasUnsavedChanges) {
                         state.copy(
@@ -60,6 +75,9 @@ class SettingsViewModel(
                             savedNickname = nickname,
                             snoozeEnabled = snoozeEnabled,
                             snoozeIntervalMinutes = snooze,
+                            gymWeightUnit = weightUnit,
+                            gymSetRestSeconds = setRest,
+                            gymExerciseRestSeconds = exerciseRest,
                             keepDataOnUninstall = keepData,
                         )
                     } else {
@@ -70,6 +88,9 @@ class SettingsViewModel(
                             savedNickname = nickname,
                             snoozeEnabled = snoozeEnabled,
                             snoozeIntervalMinutes = snooze,
+                            gymWeightUnit = weightUnit,
+                            gymSetRestSeconds = setRest,
+                            gymExerciseRestSeconds = exerciseRest,
                             keepDataOnUninstall = keepData,
                         )
                     }
@@ -124,6 +145,61 @@ class SettingsViewModel(
         _uiState.update { it.copy(keepDataOnUninstall = enabled) }
         viewModelScope.launch {
             profileRepository.updateKeepDataOnUninstall(enabled)
+        }
+    }
+
+    fun cycleGymWeightUnit() {
+        val next = when (_uiState.value.gymWeightUnit) {
+            WeightUnit.KG -> WeightUnit.LB
+            WeightUnit.LB -> WeightUnit.KG
+        }
+        _uiState.update { it.copy(gymWeightUnit = next) }
+        viewModelScope.launch {
+            profileRepository.updateGymWeightUnit(next.name)
+        }
+    }
+
+    fun incrementGymSetRest() {
+        updateGymSetRest(_uiState.value.gymSetRestSeconds + 10)
+    }
+
+    fun decrementGymSetRest() {
+        updateGymSetRest(_uiState.value.gymSetRestSeconds - 10)
+    }
+
+    fun onGymSetRestInput(raw: String) {
+        if (raw.isEmpty()) return
+        val parsed = raw.toIntOrNull() ?: return
+        updateGymSetRest(parsed)
+    }
+
+    fun incrementGymExerciseRest() {
+        updateGymExerciseRest(_uiState.value.gymExerciseRestSeconds + 10)
+    }
+
+    fun decrementGymExerciseRest() {
+        updateGymExerciseRest(_uiState.value.gymExerciseRestSeconds - 10)
+    }
+
+    fun onGymExerciseRestInput(raw: String) {
+        if (raw.isEmpty()) return
+        val parsed = raw.toIntOrNull() ?: return
+        updateGymExerciseRest(parsed)
+    }
+
+    private fun updateGymSetRest(seconds: Int) {
+        val clamped = GymLimits.clampSetRestSeconds(seconds)
+        _uiState.update { it.copy(gymSetRestSeconds = clamped) }
+        viewModelScope.launch {
+            profileRepository.updateGymSetRestSeconds(clamped)
+        }
+    }
+
+    private fun updateGymExerciseRest(seconds: Int) {
+        val clamped = GymLimits.clampExerciseRestSeconds(seconds)
+        _uiState.update { it.copy(gymExerciseRestSeconds = clamped) }
+        viewModelScope.launch {
+            profileRepository.updateGymExerciseRestSeconds(clamped)
         }
     }
 

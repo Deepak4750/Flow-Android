@@ -6,6 +6,8 @@ import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.model.SnoozeSettings
+import com.deepak.flow.core.notification.ACTIVE_WORKOUT_NOTIFICATION_GUARD_ID
+import com.deepak.flow.core.notification.ActiveWorkoutNotificationIntents
 import com.deepak.flow.core.notification.NotificationCancelGuard
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.notification.ReminderNotificationActionPlan
@@ -35,6 +37,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 handleWater(context, intent)
                 return
             }
+            ActiveWorkoutNotificationIntents.ACTION_RESTORE -> {
+                handleActiveWorkoutRestore(context)
+                return
+            }
         }
 
         val reminderId = intent.getLongExtra(EXTRA_REMINDER_ID, -1L)
@@ -52,6 +58,19 @@ class NotificationActionReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 execute(context, app, reminderId, plan)
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+
+    private fun handleActiveWorkoutRestore(context: Context) {
+        if (NotificationCancelGuard.consume(ACTIVE_WORKOUT_NOTIFICATION_GUARD_ID)) return
+        val pendingResult = goAsync()
+        val app = context.applicationContext as FlowApplication
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                app.activeWorkoutNotificationController.restoreIfActive()
             } finally {
                 pendingResult.finish()
             }

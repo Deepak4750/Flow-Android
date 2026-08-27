@@ -34,6 +34,41 @@ class GymWorkoutRepositoryImpl(
     override fun observeSession(workoutId: Long): Flow<GymWorkoutSession?> =
         dao.observeWorkout(workoutId).flatMapLatestSession()
 
+    override fun observeCompletedSessionsBetween(
+        fromInclusive: Long,
+        toExclusive: Long,
+    ): Flow<List<GymWorkoutSession>> =
+        dao.observeCompletedBetween(
+            status = GymWorkoutStatus.COMPLETED.name,
+            fromInclusive = fromInclusive,
+            toExclusive = toExclusive,
+        ).flatMapLatest { entities ->
+            if (entities.isEmpty()) {
+                flowOf(emptyList())
+            } else {
+                val sessionFlows = entities.map { entity ->
+                    combine(
+                        dao.observeWorkout(entity.id),
+                        dao.observeExercises(entity.id),
+                        dao.observeSetsForWorkout(entity.id),
+                    ) { workout, exercises, sets ->
+                        if (workout == null) return@combine null
+                        val setsByExercise = sets.groupBy { it.workoutExerciseId }
+                        workout.toDomain(
+                            exercises.map { exercise ->
+                                exercise.toDomain(
+                                    setsByExercise[exercise.id].orEmpty().map { it.toDomain() },
+                                )
+                            },
+                        )
+                    }
+                }
+                combine(sessionFlows) { sessions ->
+                    sessions.filterNotNull()
+                }
+            }
+        }
+
     override suspend fun getActiveSession(type: GymWorkoutType): GymWorkoutSession? {
         val entity = dao.getLatestByTypeAndStatus(type.name, GymWorkoutStatus.ACTIVE.name) ?: return null
         return loadSession(entity)
@@ -57,8 +92,27 @@ class GymWorkoutRepositoryImpl(
     }
 
     override suspend fun ensureActiveFreeWorkout(weightUnit: WeightUnit): Long {
-        getActiveSession(GymWorkoutType.FREE)?.let { return it.id }
+        getActiveSession(GymWorkoutType.FREE)?.let { existing ->
+            if (existing.weightUnit != weightUnit) {
+                setWeightUnit(existing.id, weightUnit)
+            }
+            backfillExerciseStartedAtIfNeeded(existing)
+            return existing.id
+        }
         return startFreeWorkout(weightUnit)
+    }
+
+    /**
+     * One-time repair for active sessions that predate [currentExerciseStartedAtEpochMilli].
+     * Uses session start (not set count) so elapsed stays anchored to a real timestamp.
+     */
+    private suspend fun backfillExerciseStartedAtIfNeeded(session: GymWorkoutSession) {
+        if (session.exercises.isEmpty()) return
+        if (session.currentExerciseStartedAtEpochMilli != null) return
+        val workout = dao.getWorkout(session.id) ?: return
+        dao.updateWorkout(
+            workout.copy(currentExerciseStartedAtEpochMilli = session.startedAtEpochMilli),
+        )
     }
 
     override suspend fun setWeightUnit(workoutId: Long, unit: WeightUnit) {
@@ -68,7 +122,19 @@ class GymWorkoutRepositoryImpl(
 
     override suspend fun setCurrentExerciseIndex(workoutId: Long, index: Int) {
         val workout = dao.getWorkout(workoutId) ?: return
-        dao.updateWorkout(workout.copy(currentExerciseIndex = index.coerceAtLeast(0)))
+        val newIndex = index.coerceAtLeast(0)
+        val now = System.currentTimeMillis()
+        val exerciseStartedAt = if (newIndex != workout.currentExerciseIndex) {
+            now
+        } else {
+            workout.currentExerciseStartedAtEpochMilli ?: now
+        }
+        dao.updateWorkout(
+            workout.copy(
+                currentExerciseIndex = newIndex,
+                currentExerciseStartedAtEpochMilli = exerciseStartedAt,
+            ),
+        )
     }
 
     override suspend fun addExercise(
@@ -92,7 +158,12 @@ class GymWorkoutRepositoryImpl(
         )
         val workout = dao.getWorkout(workoutId)
         if (workout != null) {
-            dao.updateWorkout(workout.copy(currentExerciseIndex = order))
+            dao.updateWorkout(
+                workout.copy(
+                    currentExerciseIndex = order,
+                    currentExerciseStartedAtEpochMilli = System.currentTimeMillis(),
+                ),
+            )
         }
         return exerciseId
     }
@@ -118,6 +189,11 @@ class GymWorkoutRepositoryImpl(
 
     override suspend fun deleteExercise(exerciseId: Long) {
         val exercise = dao.getExercise(exerciseId) ?: return
+        val workoutBefore = dao.getWorkout(exercise.workoutId) ?: return
+        val exercisesBefore = dao.getExercises(exercise.workoutId)
+        val previousCurrentId = exercisesBefore
+            .getOrNull(workoutBefore.currentExerciseIndex.coerceAtLeast(0))
+            ?.id
         val sets = dao.getSets(exerciseId)
         sets.forEach { dao.deleteSet(it.id) }
         dao.deleteExercise(exerciseId)
@@ -128,11 +204,20 @@ class GymWorkoutRepositoryImpl(
             }
         }
         val workout = dao.getWorkout(exercise.workoutId) ?: return
+        val newIndex = workout.currentExerciseIndex.coerceAtMost(
+            (remaining.size - 1).coerceAtLeast(0),
+        )
+        val newCurrentId = remaining.getOrNull(newIndex)?.id
+        val exerciseStartedAt = when {
+            newCurrentId == null -> null
+            newCurrentId != previousCurrentId -> System.currentTimeMillis()
+            else -> workout.currentExerciseStartedAtEpochMilli
+                ?: System.currentTimeMillis()
+        }
         dao.updateWorkout(
             workout.copy(
-                currentExerciseIndex = workout.currentExerciseIndex.coerceAtMost(
-                    (remaining.size - 1).coerceAtLeast(0),
-                ),
+                currentExerciseIndex = newIndex,
+                currentExerciseStartedAtEpochMilli = exerciseStartedAt,
             ),
         )
     }
@@ -208,6 +293,25 @@ class GymWorkoutRepositoryImpl(
         renumberSets(existing.workoutExerciseId)
     }
 
+    override suspend fun restoreSet(
+        exerciseId: Long,
+        measurements: GymSetMeasurements,
+        failure: Boolean,
+        setNumber: Int,
+    ): Long {
+        val id = dao.insertSet(
+            measurements.toEntity(
+                id = 0L,
+                workoutExerciseId = exerciseId,
+                setNumber = setNumber.coerceAtLeast(1),
+                failure = failure,
+                saved = true,
+            ),
+        )
+        renumberSets(exerciseId, preferId = id, preferNumber = setNumber.coerceAtLeast(1))
+        return id
+    }
+
     override suspend fun startRest(workoutId: Long, durationSeconds: Int, nowEpochMilli: Long) {
         val workout = dao.getWorkout(workoutId) ?: return
         val seconds = GymLimits.clampSetRestSeconds(durationSeconds)
@@ -227,10 +331,24 @@ class GymWorkoutRepositoryImpl(
         if (extraSeconds == 0) return
         val workout = dao.getWorkout(workoutId) ?: return
         val currentEnd = workout.restEndsAtEpochMilli ?: return
-        val base = maxOf(currentEnd, nowEpochMilli)
+        val remainingSeconds = GymLogic.remainingRestSeconds(currentEnd, nowEpochMilli)
+        if (extraSeconds < 0) {
+            val minSeconds = GymLimits.SET_REST_MIN_SECONDS
+            if (remainingSeconds <= minSeconds) return
+            val nextSeconds = (remainingSeconds + extraSeconds).coerceAtLeast(minSeconds)
+            dao.updateWorkout(
+                workout.copy(
+                    restEndsAtEpochMilli = nowEpochMilli + nextSeconds * 1000L,
+                ),
+            )
+            return
+        }
+        val maxSeconds = GymLimits.SET_REST_MAX_SECONDS
+        if (remainingSeconds >= maxSeconds) return
+        val nextSeconds = (remainingSeconds + extraSeconds).coerceAtMost(maxSeconds)
         dao.updateWorkout(
             workout.copy(
-                restEndsAtEpochMilli = base + extraSeconds * 1000L,
+                restEndsAtEpochMilli = nowEpochMilli + nextSeconds * 1000L,
             ),
         )
     }
@@ -254,6 +372,68 @@ class GymWorkoutRepositoryImpl(
 
     override suspend fun discardWorkout(workoutId: Long) {
         dao.deleteWorkoutCascade(workoutId)
+    }
+
+    override suspend fun setWorkoutStarred(workoutId: Long, starred: Boolean) {
+        val workout = dao.getWorkout(workoutId) ?: return
+        dao.updateWorkout(workout.copy(starred = starred))
+    }
+
+    override suspend fun setWorkoutTitle(workoutId: Long, title: String) {
+        val workout = dao.getWorkout(workoutId) ?: return
+        dao.updateWorkout(workout.copy(title = title.trim()))
+    }
+
+    override suspend fun restoreExercise(
+        workoutId: Long,
+        sortOrder: Int,
+        name: String,
+        trackingFields: Set<TrackingField>,
+        note: String,
+        sets: List<GymWorkoutSet>,
+    ): Long {
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty()) { "Name can't be empty." }
+        require(trackingFields.isNotEmpty()) { "Pick at least one tracking field." }
+        val existing = dao.getExercises(workoutId)
+        existing.filter { it.sortOrder >= sortOrder }.forEach { exercise ->
+            dao.updateExercise(exercise.copy(sortOrder = exercise.sortOrder + 1))
+        }
+        val exerciseId = dao.insertExercise(
+            GymWorkoutExerciseEntity(
+                workoutId = workoutId,
+                exerciseName = trimmed,
+                sortOrder = sortOrder,
+                note = GymLimits.clampNote(note),
+                trackingFields = GymLogic.encodeTrackingFields(trackingFields),
+            ),
+        )
+        sets.sortedBy { it.setNumber }.forEach { set ->
+            dao.insertSet(
+                set.measurements.toEntity(
+                    id = 0L,
+                    workoutExerciseId = exerciseId,
+                    setNumber = set.setNumber,
+                    failure = set.failure,
+                    saved = set.saved,
+                ),
+            )
+        }
+        val remaining = dao.getExercises(workoutId)
+        remaining.forEachIndexed { index, item ->
+            if (item.sortOrder != index) {
+                dao.updateExercise(item.copy(sortOrder = index))
+            }
+        }
+        val workout = dao.getWorkout(workoutId) ?: return exerciseId
+        if (sortOrder <= workout.currentExerciseIndex) {
+            val maxIndex = remaining.lastIndex.coerceAtLeast(0)
+            val nextIndex = (workout.currentExerciseIndex + 1).coerceIn(0, maxIndex)
+            dao.updateWorkout(
+                workout.copy(currentExerciseIndex = nextIndex),
+            )
+        }
+        return exerciseId
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -304,6 +484,9 @@ private fun GymWorkoutEntity.toDomain(exercises: List<GymWorkoutExercise>) = Gym
     restEndsAtEpochMilli = restEndsAtEpochMilli,
     restDurationSeconds = restDurationSeconds,
     currentExerciseIndex = currentExerciseIndex,
+    currentExerciseStartedAtEpochMilli = currentExerciseStartedAtEpochMilli,
+    starred = starred,
+    title = title,
     exercises = exercises,
 )
 

@@ -42,6 +42,15 @@ sealed interface FlowRoute {
     data class HistoryWater(val dateEpochDay: Long) : FlowRoute
 
     @Serializable
+    data class HistoryGym(val dateEpochDay: Long) : FlowRoute
+
+    @Serializable
+    data class HistoryGymWorkout(val workoutId: Long) : FlowRoute
+
+    @Serializable
+    data class HistoryGymEditExercise(val workoutId: Long, val exerciseId: Long) : FlowRoute
+
+    @Serializable
     data object Settings : FlowRoute
 
     @Serializable
@@ -56,7 +65,7 @@ enum class FlowDrawerDestination(
     HOME("Home"),
     REMINDERS("Tasks", isFeature = true),
     WATER("H₂O", isFeature = true),
-    GYM("Gym"),
+    GYM("Gym", isFeature = true),
     HISTORY("History"),
     SETTINGS("Settings"),
     ABOUT("About"),
@@ -65,18 +74,22 @@ enum class FlowDrawerDestination(
 fun FlowDrawerDestination.isEnabled(
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean = true,
 ): Boolean = when (this) {
     FlowDrawerDestination.REMINDERS -> remindersEnabled
     FlowDrawerDestination.WATER -> waterEnabled
+    FlowDrawerDestination.GYM -> gymEnabled
     else -> true
 }
 
 fun FlowDrawerDestination.featureChecked(
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean = true,
 ): Boolean? = when (this) {
     FlowDrawerDestination.REMINDERS -> remindersEnabled
     FlowDrawerDestination.WATER -> waterEnabled
+    FlowDrawerDestination.GYM -> gymEnabled
     else -> null
 }
 
@@ -89,6 +102,20 @@ fun NavController.navigateFromDrawer(destination: FlowDrawerDestination) {
         FlowDrawerDestination.HISTORY -> navigateDrawerRoute(FlowRoute.History)
         FlowDrawerDestination.SETTINGS -> navigate(FlowRoute.Settings)
         FlowDrawerDestination.ABOUT -> navigate(FlowRoute.About)
+    }
+}
+
+/** Open the active Free Workout screen from a notification tap. */
+fun NavController.navigateToActiveFreeWorkout() {
+    navigate(FlowRoute.Gym) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
+    }
+    navigate(FlowRoute.GymFreeWorkout) {
+        launchSingleTop = true
     }
 }
 

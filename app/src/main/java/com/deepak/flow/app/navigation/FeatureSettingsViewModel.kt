@@ -31,6 +31,7 @@ data class FeatureSettingsUiState(
     val profileName: String? = null,
     val remindersEnabled: Boolean = UserProfile.DEFAULT_REMINDERS_ENABLED,
     val waterEnabled: Boolean = UserProfile.DEFAULT_WATER_ENABLED,
+    val gymEnabled: Boolean = UserProfile.DEFAULT_GYM_ENABLED,
     val waterGoalMl: Int? = null,
     val waterBottleStyleIndex: Int? = null,
     val waterIntakeMl: Int = 0,
@@ -59,6 +60,7 @@ class FeatureSettingsViewModel(
                     ?: profile?.nickname?.takeIf { it.isNotBlank() },
                 remindersEnabled = profile?.remindersEnabled ?: UserProfile.DEFAULT_REMINDERS_ENABLED,
                 waterEnabled = profile?.waterEnabled ?: UserProfile.DEFAULT_WATER_ENABLED,
+                gymEnabled = profile?.gymEnabled ?: UserProfile.DEFAULT_GYM_ENABLED,
                 waterGoalMl = profile?.waterGoalMl,
                 waterBottleStyleIndex = profile?.waterBottleStyleIndex,
                 waterIntakeMl = profile?.todayWaterIntakeMl(today) ?: 0,
@@ -100,6 +102,12 @@ class FeatureSettingsViewModel(
             profileRepository.updateWaterEnabled(enabled)
             syncWaterReminders()
             FlowWidgets.refresh(app)
+        }
+    }
+
+    fun setGymEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            profileRepository.updateGymEnabled(enabled)
         }
     }
 

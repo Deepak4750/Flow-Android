@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.deepak.flow.core.backup.KeepDataStore
 import com.deepak.flow.core.database.FlowDatabase
 import com.deepak.flow.core.model.UserProfile
+import com.deepak.flow.core.notification.ActiveWorkoutNotificationController
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.notification.NotificationScheduler
 import com.deepak.flow.core.repository.GymWorkoutRepository
@@ -41,6 +42,9 @@ class FlowApplication : Application() {
     lateinit var gymWorkoutRepository: GymWorkoutRepository
         private set
 
+    lateinit var activeWorkoutNotificationController: ActiveWorkoutNotificationController
+        private set
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
@@ -74,6 +78,10 @@ class FlowApplication : Application() {
                 FlowDatabase.MIGRATION_17_18,
                 FlowDatabase.MIGRATION_18_19,
                 FlowDatabase.MIGRATION_19_20,
+                FlowDatabase.MIGRATION_20_21,
+                FlowDatabase.MIGRATION_21_22,
+                FlowDatabase.MIGRATION_22_23,
+                FlowDatabase.MIGRATION_23_24,
             )
             .build()
 
@@ -88,14 +96,22 @@ class FlowApplication : Application() {
             dao = database.userProfileDao(),
             waterDayDao = database.waterDayDao(),
         )
+        gymWorkoutRepository = GymWorkoutRepositoryImpl(
+            dao = database.gymWorkoutDao(),
+        )
         historyRepository = HistoryRepositoryImpl(
             historyDao = database.historyDao(),
             waterDayDao = database.waterDayDao(),
             profileDao = database.userProfileDao(),
+            gymWorkoutDao = database.gymWorkoutDao(),
+            gymWorkoutRepository = gymWorkoutRepository,
         )
-        gymWorkoutRepository = GymWorkoutRepositoryImpl(
-            dao = database.gymWorkoutDao(),
+        activeWorkoutNotificationController = ActiveWorkoutNotificationController(
+            appContext = this,
+            repository = gymWorkoutRepository,
+            scope = applicationScope,
         )
+        activeWorkoutNotificationController.start()
         com.deepak.flow.core.widget.FlowWidgets.refresh(this)
         applicationScope.launch {
             notificationScheduler.syncWaterReminder(profileRepository.getProfile())

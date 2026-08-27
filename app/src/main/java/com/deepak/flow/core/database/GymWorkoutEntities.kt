@@ -20,6 +20,10 @@ data class GymWorkoutEntity(
     val restEndsAtEpochMilli: Long? = null,
     val restDurationSeconds: Int = 90,
     val currentExerciseIndex: Int = 0,
+    /** When the current exercise became current. Null until the first exercise exists. */
+    val currentExerciseStartedAtEpochMilli: Long? = null,
+    val starred: Boolean = false,
+    val title: String = "",
 )
 
 @Entity(
@@ -57,4 +61,4 @@ data class GymWorkoutSetEntity(
     val failure: Boolean = false,
     val saved: Boolean = false,
 )
-
+

@@ -24,8 +24,10 @@ fun GymScreen(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onNewRoutine: () -> Unit,
     onFreeWorkout: () -> Unit,
@@ -36,8 +38,10 @@ fun GymScreen(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         modifier = modifier,
     ) {
@@ -71,8 +75,10 @@ fun GymPlaceholderDestinationScreen(
     userName: String?,
     remindersEnabled: Boolean,
     waterEnabled: Boolean,
+    gymEnabled: Boolean,
     onRemindersEnabledChange: (Boolean) -> Unit,
     onWaterEnabledChange: (Boolean) -> Unit,
+    onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -82,8 +88,10 @@ fun GymPlaceholderDestinationScreen(
         userName = userName,
         remindersEnabled = remindersEnabled,
         waterEnabled = waterEnabled,
+        gymEnabled = gymEnabled,
         onRemindersEnabledChange = onRemindersEnabledChange,
         onWaterEnabledChange = onWaterEnabledChange,
+        onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         onBack = onBack,
         modifier = modifier,
@@ -91,4 +99,4 @@ fun GymPlaceholderDestinationScreen(
         FlowScreenTitle(title)
     }
 }
-
+

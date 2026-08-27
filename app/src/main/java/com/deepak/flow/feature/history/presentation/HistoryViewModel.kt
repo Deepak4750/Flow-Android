@@ -4,10 +4,13 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
+import com.deepak.flow.core.history.HistoryCalendarLogic
+import com.deepak.flow.core.history.HistoryCompletionDotLevel
 import com.deepak.flow.core.history.HistoryGraphLogic
 import com.deepak.flow.core.history.HistoryGraphPeriod
 import com.deepak.flow.core.history.HistorySeriesPoint
 import com.deepak.flow.core.model.formatWaterLiters
+import com.deepak.flow.core.scheduling.SchedulingEngine
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,14 +31,21 @@ enum class HistoryMainMode {
 data class HistoryCalendarUiState(
     val yearMonth: YearMonth = YearMonth.now(),
     val activityDays: Set<Long> = emptySet(),
+    val completionDots: Map<Long, HistoryCompletionDotLevel> = emptyMap(),
     val todayEpochDay: Long = LocalDate.now().toEpochDay(),
+    val earliestEpochDay: Long? = null,
+    val latestEpochDay: Long? = null,
+    val canGoPreviousMonth: Boolean = false,
+    val canGoNextMonth: Boolean = false,
 )
 
 data class HistoryGraphUiState(
     val period: HistoryGraphPeriod = HistoryGraphPeriod.DAILY,
+    val yearMonth: YearMonth = YearMonth.now(),
     val windowTitle: String = "",
     val points: List<HistorySeriesPoint> = emptyList(),
     val canGoForward: Boolean = false,
+    val canGoBack: Boolean = false,
 )
 
 data class HistoryUiState(
@@ -50,38 +60,116 @@ class HistoryViewModel(
 ) : AndroidViewModel(application) {
 
     private val historyRepository = (application as FlowApplication).historyRepository
+    private val reminderRepository = (application as FlowApplication).reminderRepository
+    private val profileRepository = (application as FlowApplication).profileRepository
     private val zoneId: ZoneId = ZoneId.systemDefault()
+    private val schedulingEngine = SchedulingEngine()
 
     private val mode = MutableStateFlow(HistoryMainMode.CALENDAR)
     private val yearMonth = MutableStateFlow(YearMonth.now(zoneId))
     private val graphPeriod = MutableStateFlow(HistoryGraphPeriod.DAILY)
-    private val graphOffset = MutableStateFlow(0)
 
-    private val calendarState = yearMonth.flatMapLatest { month ->
-        historyRepository.observeActivityDays(month, zoneId).map { days ->
+    private val boundsState = historyRepository.observeHistoryBounds(zoneId)
+
+    private val calendarState = combine(
+        yearMonth,
+        boundsState,
+    ) { month, bounds ->
+        month to bounds
+    }.flatMapLatest { (month, bounds) ->
+        val earliest = bounds.earliestEpochDay
+        val latest = bounds.latestEpochDay
+        combine(
+            historyRepository.observeActivityDays(month, zoneId),
+            historyRepository.observeDaySeries(
+                fromEpochDay = month.atDay(1).toEpochDay(),
+                toEpochDay = month.atEndOfMonth().toEpochDay(),
+                zoneId = zoneId,
+            ),
+            reminderRepository.observeReminders(),
+            profileRepository.observeProfile(),
+        ) { activityDays, daySummaries, reminders, profile ->
+            val tasksEnabled = profile?.remindersEnabled != false
+            val waterEnabled = profile?.waterEnabled != false
+            val waterGoal = profile?.waterGoalMl
+            val summaryByDay = daySummaries.associateBy { it.dateEpochDay }
+            val completionDots = buildMap {
+                var day = month.atDay(1)
+                val end = month.atEndOfMonth()
+                while (!day.isAfter(end)) {
+                    val epochDay = day.toEpochDay()
+                    val summary = summaryByDay[epochDay]
+                    val scheduled = if (tasksEnabled) {
+                        reminders.count { reminder ->
+                            reminder.enabled &&
+                                schedulingEngine.isScheduledOnDate(reminder, day, zoneId)
+                        }
+                    } else {
+                        0
+                    }
+                    val completed = summary?.taskCount ?: 0
+                    val waterMl = summary?.waterIntakeMl ?: 0
+                    val percent = HistoryCalendarLogic.combinedCompletionPercent(
+                        tasksEnabled = tasksEnabled,
+                        waterEnabled = waterEnabled,
+                        scheduledTasks = scheduled,
+                        completedTasks = completed,
+                        waterIntakeMl = waterMl,
+                        waterGoalMl = waterGoal,
+                    )
+                    put(epochDay, HistoryCalendarLogic.dotLevel(percent))
+                    day = day.plusDays(1)
+                }
+            }
+            val today = LocalDate.now(zoneId)
+            val todayMonth = YearMonth.from(today)
+            val earliestMonth = earliest?.let { YearMonth.from(LocalDate.ofEpochDay(it)) }
+            val latestMonth = latest?.let { YearMonth.from(LocalDate.ofEpochDay(it)) }
+            val maxMonth = when {
+                latestMonth == null -> todayMonth
+                latestMonth.isBefore(todayMonth) -> todayMonth
+                else -> latestMonth
+            }
             HistoryCalendarUiState(
                 yearMonth = month,
-                activityDays = days,
-                todayEpochDay = LocalDate.now(zoneId).toEpochDay(),
+                activityDays = activityDays,
+                completionDots = completionDots,
+                todayEpochDay = today.toEpochDay(),
+                earliestEpochDay = earliest,
+                latestEpochDay = latest,
+                canGoPreviousMonth = earliestMonth != null && month.isAfter(earliestMonth),
+                canGoNextMonth = month.isBefore(maxMonth),
             )
         }
     }
 
-    private val graphState = combine(graphPeriod, graphOffset) { period, offset ->
-        period to offset
-    }.flatMapLatest { (period, offset) ->
-        val window = HistoryGraphLogic.window(
-            period = period,
-            anchorEnd = LocalDate.now(zoneId),
-            offsetStepsBack = offset,
-        )
+    private val graphState = combine(
+        yearMonth,
+        graphPeriod,
+        boundsState,
+    ) { month, period, bounds ->
+        Triple(month, period, bounds)
+    }.flatMapLatest { (month, period, bounds) ->
+        val window = HistoryGraphLogic.windowForMonth(period, month)
+        val earliest = bounds.earliestEpochDay
+        val latest = bounds.latestEpochDay
         historyRepository.observeDaySeries(
             fromEpochDay = window.fromEpochDay,
             toEpochDay = window.toEpochDay,
             zoneId = zoneId,
         ).map { days ->
+            val today = LocalDate.now(zoneId)
+            val todayMonth = YearMonth.from(today)
+            val earliestMonth = earliest?.let { YearMonth.from(LocalDate.ofEpochDay(it)) }
+            val latestMonth = latest?.let { YearMonth.from(LocalDate.ofEpochDay(it)) }
+            val maxMonth = when {
+                latestMonth == null -> todayMonth
+                latestMonth.isBefore(todayMonth) -> todayMonth
+                else -> latestMonth
+            }
             HistoryGraphUiState(
                 period = period,
+                yearMonth = month,
                 windowTitle = window.title,
                 points = HistoryGraphLogic.bucket(
                     period = period,
@@ -89,7 +177,8 @@ class HistoryViewModel(
                     fromEpochDay = window.fromEpochDay,
                     toEpochDay = window.toEpochDay,
                 ),
-                canGoForward = offset > 0,
+                canGoForward = month.isBefore(maxMonth),
+                canGoBack = earliestMonth != null && month.isAfter(earliestMonth),
             )
         }
     }
@@ -115,29 +204,24 @@ class HistoryViewModel(
     }
 
     fun setGraphPeriod(period: HistoryGraphPeriod) {
-        if (graphPeriod.value != period) {
-            graphPeriod.value = period
-            graphOffset.value = 0
-        }
+        graphPeriod.value = period
     }
 
     fun goToPreviousMonth() {
-        yearMonth.value = yearMonth.value.minusMonths(1)
+        if (uiState.value.calendar.canGoPreviousMonth) {
+            yearMonth.value = yearMonth.value.minusMonths(1)
+        }
     }
 
     fun goToNextMonth() {
-        yearMonth.value = yearMonth.value.plusMonths(1)
-    }
-
-    fun goToPreviousGraphWindow() {
-        graphOffset.value = graphOffset.value + 1
-    }
-
-    fun goToNextGraphWindow() {
-        if (graphOffset.value > 0) {
-            graphOffset.value = graphOffset.value - 1
+        if (uiState.value.calendar.canGoNextMonth) {
+            yearMonth.value = yearMonth.value.plusMonths(1)
         }
     }
+
+    fun goToPreviousGraphWindow() = goToPreviousMonth()
+
+    fun goToNextGraphWindow() = goToNextMonth()
 }
 
 fun HistorySeriesPoint.waterBarValue(): Float = waterIntakeMl.toFloat()
@@ -156,4 +240,13 @@ fun formatHistoryGraphTaskTotal(points: List<HistorySeriesPoint>): String {
         1 -> "1 task"
         else -> "$total tasks"
     }
+}
+
+fun formatHistoryGraphWaterPoint(point: HistorySeriesPoint): String =
+    if (point.waterIntakeMl > 0) formatWaterLiters(point.waterIntakeMl) else "0 L"
+
+fun formatHistoryGraphTaskPoint(point: HistorySeriesPoint): String = when (point.taskCount) {
+    0 -> "0 tasks"
+    1 -> "1 task"
+    else -> "${point.taskCount} tasks"
 }
