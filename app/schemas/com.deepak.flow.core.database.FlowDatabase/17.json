@@ -1,0 +1,810 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 17,
+    "identityHash": "d7a2344b27aef9bad8339c0dbf793dd1",
+    "entities": [
+      {
+        "tableName": "reminders",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `category` TEXT NOT NULL, `customCategoryName` TEXT, `scheduleJson` TEXT NOT NULL, `reminderTimesJson` TEXT NOT NULL, `startDateEpochDay` INTEGER NOT NULL, `endDateEpochDay` INTEGER, `enabled` INTEGER NOT NULL, `activeHoursJson` TEXT, `reason` TEXT, `note` TEXT, `accentColorIndex` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "customCategoryName",
+            "columnName": "customCategoryName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "scheduleJson",
+            "columnName": "scheduleJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reminderTimesJson",
+            "columnName": "reminderTimesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startDateEpochDay",
+            "columnName": "startDateEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endDateEpochDay",
+            "columnName": "endDateEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activeHoursJson",
+            "columnName": "activeHoursJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "accentColorIndex",
+            "columnName": "accentColorIndex",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "user_profile",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `displayName` TEXT, `nickname` TEXT, `onboardingCompleted` INTEGER NOT NULL, `snoozeEnabled` INTEGER NOT NULL, `snoozeIntervalMinutes` INTEGER NOT NULL, `remindersEnabled` INTEGER NOT NULL, `waterEnabled` INTEGER NOT NULL, `waterGoalMl` INTEGER, `waterBottleStyleIndex` INTEGER, `waterIntakeMl` INTEGER NOT NULL, `waterIntakeEpochDay` INTEGER, `waterAddLog` TEXT NOT NULL, `waterCustomQuickAddsMl` TEXT NOT NULL, `waterRemindersEnabled` INTEGER NOT NULL, `waterReminderIntervalMinutes` INTEGER NOT NULL, `waterActiveHoursEnabled` INTEGER NOT NULL, `waterActiveHoursStartMinutes` INTEGER NOT NULL, `waterActiveHoursEndMinutes` INTEGER NOT NULL, `keepDataOnUninstall` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nickname",
+            "columnName": "nickname",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "onboardingCompleted",
+            "columnName": "onboardingCompleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snoozeEnabled",
+            "columnName": "snoozeEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "snoozeIntervalMinutes",
+            "columnName": "snoozeIntervalMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remindersEnabled",
+            "columnName": "remindersEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterEnabled",
+            "columnName": "waterEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterGoalMl",
+            "columnName": "waterGoalMl",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "waterBottleStyleIndex",
+            "columnName": "waterBottleStyleIndex",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "waterIntakeMl",
+            "columnName": "waterIntakeMl",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterIntakeEpochDay",
+            "columnName": "waterIntakeEpochDay",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "waterAddLog",
+            "columnName": "waterAddLog",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterCustomQuickAddsMl",
+            "columnName": "waterCustomQuickAddsMl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterRemindersEnabled",
+            "columnName": "waterRemindersEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterReminderIntervalMinutes",
+            "columnName": "waterReminderIntervalMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterActiveHoursEnabled",
+            "columnName": "waterActiveHoursEnabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterActiveHoursStartMinutes",
+            "columnName": "waterActiveHoursStartMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "waterActiveHoursEndMinutes",
+            "columnName": "waterActiveHoursEndMinutes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "keepDataOnUninstall",
+            "columnName": "keepDataOnUninstall",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "reminder_day_completions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`reminderId` INTEGER NOT NULL, `dateEpochDay` INTEGER NOT NULL, `completedAtEpochMilli` INTEGER NOT NULL, PRIMARY KEY(`reminderId`, `dateEpochDay`))",
+        "fields": [
+          {
+            "fieldPath": "reminderId",
+            "columnName": "reminderId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dateEpochDay",
+            "columnName": "dateEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAtEpochMilli",
+            "columnName": "completedAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "reminderId",
+            "dateEpochDay"
+          ]
+        }
+      },
+      {
+        "tableName": "gym_routines",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `currentDayIndex` INTEGER NOT NULL, `pendingSessionId` INTEGER, `lastCompletedDayIndex` INTEGER, `createdAtEpochMilli` INTEGER NOT NULL, `updatedAtEpochMilli` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentDayIndex",
+            "columnName": "currentDayIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pendingSessionId",
+            "columnName": "pendingSessionId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "lastCompletedDayIndex",
+            "columnName": "lastCompletedDayIndex",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAtEpochMilli",
+            "columnName": "createdAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMilli",
+            "columnName": "updatedAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "gym_routine_days",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `routineId` INTEGER NOT NULL, `dayIndex` INTEGER NOT NULL, `name` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "routineId",
+            "columnName": "routineId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dayIndex",
+            "columnName": "dayIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_gym_routine_days_routineId",
+            "unique": false,
+            "columnNames": [
+              "routineId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_gym_routine_days_routineId` ON `${TABLE_NAME}` (`routineId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "gym_routine_exercises",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `dayId` INTEGER NOT NULL, `name` TEXT NOT NULL, `trackingFields` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, `setCount` INTEGER NOT NULL, `note` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dayId",
+            "columnName": "dayId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trackingFields",
+            "columnName": "trackingFields",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "setCount",
+            "columnName": "setCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_gym_routine_exercises_dayId",
+            "unique": false,
+            "columnNames": [
+              "dayId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_gym_routine_exercises_dayId` ON `${TABLE_NAME}` (`dayId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "gym_exercise_notes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`nameKey` TEXT NOT NULL, `displayName` TEXT NOT NULL, `note` TEXT NOT NULL, `trackingFields` TEXT NOT NULL, `updatedAtEpochMilli` INTEGER NOT NULL, PRIMARY KEY(`nameKey`))",
+        "fields": [
+          {
+            "fieldPath": "nameKey",
+            "columnName": "nameKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trackingFields",
+            "columnName": "trackingFields",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMilli",
+            "columnName": "updatedAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "nameKey"
+          ]
+        }
+      },
+      {
+        "tableName": "gym_preferences",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `activeRoutineId` INTEGER, `weightUnit` TEXT NOT NULL, `setRestSeconds` INTEGER NOT NULL, `exerciseRestSeconds` INTEGER NOT NULL, `automaticRest` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activeRoutineId",
+            "columnName": "activeRoutineId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "weightUnit",
+            "columnName": "weightUnit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "setRestSeconds",
+            "columnName": "setRestSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exerciseRestSeconds",
+            "columnName": "exerciseRestSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "automaticRest",
+            "columnName": "automaticRest",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "gym_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `routineId` INTEGER, `routineName` TEXT NOT NULL, `dayIndex` INTEGER NOT NULL, `dayName` TEXT NOT NULL, `startedAtEpochMilli` INTEGER NOT NULL, `endedAtEpochMilli` INTEGER, `status` TEXT NOT NULL, `restKind` TEXT NOT NULL, `restDurationSeconds` INTEGER NOT NULL, `restEndsAtEpochMilli` INTEGER, `restExerciseId` INTEGER, `kind` TEXT NOT NULL, `weightUnit` TEXT NOT NULL, `sessionNote` TEXT NOT NULL, `currentExerciseIndex` INTEGER NOT NULL, `currentSetIndex` INTEGER NOT NULL, `restPhase` TEXT NOT NULL, `restExerciseIndex` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "routineId",
+            "columnName": "routineId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "routineName",
+            "columnName": "routineName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dayIndex",
+            "columnName": "dayIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dayName",
+            "columnName": "dayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMilli",
+            "columnName": "startedAtEpochMilli",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAtEpochMilli",
+            "columnName": "endedAtEpochMilli",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restKind",
+            "columnName": "restKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restDurationSeconds",
+            "columnName": "restDurationSeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restEndsAtEpochMilli",
+            "columnName": "restEndsAtEpochMilli",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "restExerciseId",
+            "columnName": "restExerciseId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weightUnit",
+            "columnName": "weightUnit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionNote",
+            "columnName": "sessionNote",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentExerciseIndex",
+            "columnName": "currentExerciseIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentSetIndex",
+            "columnName": "currentSetIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restPhase",
+            "columnName": "restPhase",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restExerciseIndex",
+            "columnName": "restExerciseIndex",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_gym_sessions_routineId_dayIndex_status",
+            "unique": false,
+            "columnNames": [
+              "routineId",
+              "dayIndex",
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_gym_sessions_routineId_dayIndex_status` ON `${TABLE_NAME}` (`routineId`, `dayIndex`, `status`)"
+          },
+          {
+            "name": "index_gym_sessions_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_gym_sessions_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ]
+      },
+      {
+        "tableName": "gym_session_exercises",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` INTEGER NOT NULL, `name` TEXT NOT NULL, `trackingFields` TEXT NOT NULL, `sortOrder` INTEGER NOT NULL, `previousSetsJson` TEXT NOT NULL, `note` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "trackingFields",
+            "columnName": "trackingFields",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "previousSetsJson",
+            "columnName": "previousSetsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_gym_session_exercises_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_gym_session_exercises_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "gym_session_sets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `exerciseId` INTEGER NOT NULL, `sortOrder` INTEGER NOT NULL, `saved` INTEGER NOT NULL, `measurementsJson` TEXT NOT NULL, `failed` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exerciseId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sortOrder",
+            "columnName": "sortOrder",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "saved",
+            "columnName": "saved",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "measurementsJson",
+            "columnName": "measurementsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "failed",
+            "columnName": "failed",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_gym_session_sets_exerciseId",
+            "unique": false,
+            "columnNames": [
+              "exerciseId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_gym_session_sets_exerciseId` ON `${TABLE_NAME}` (`exerciseId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "water_days",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`dateEpochDay` INTEGER NOT NULL, `intakeMl` INTEGER NOT NULL, `addLog` TEXT NOT NULL, `goalMl` INTEGER, PRIMARY KEY(`dateEpochDay`))",
+        "fields": [
+          {
+            "fieldPath": "dateEpochDay",
+            "columnName": "dateEpochDay",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "intakeMl",
+            "columnName": "intakeMl",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addLog",
+            "columnName": "addLog",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "goalMl",
+            "columnName": "goalMl",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "dateEpochDay"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd7a2344b27aef9bad8339c0dbf793dd1')"
+    ]
+  }
+}

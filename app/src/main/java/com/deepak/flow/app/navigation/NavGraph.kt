@@ -24,7 +24,22 @@ sealed interface FlowRoute {
     data object Gym : FlowRoute
 
     @Serializable
+    data object GymNewRoutine : FlowRoute
+
+    @Serializable
+    data object GymFreeWorkout : FlowRoute
+
+    @Serializable
     data object History : FlowRoute
+
+    @Serializable
+    data class HistoryDay(val dateEpochDay: Long) : FlowRoute
+
+    @Serializable
+    data class HistoryTasks(val dateEpochDay: Long) : FlowRoute
+
+    @Serializable
+    data class HistoryWater(val dateEpochDay: Long) : FlowRoute
 
     @Serializable
     data object Settings : FlowRoute

@@ -7,6 +7,10 @@ import com.deepak.flow.core.database.FlowDatabase
 import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.notification.NotificationScheduler
+import com.deepak.flow.core.repository.GymWorkoutRepository
+import com.deepak.flow.core.repository.GymWorkoutRepositoryImpl
+import com.deepak.flow.core.repository.HistoryRepository
+import com.deepak.flow.core.repository.HistoryRepositoryImpl
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ProfileRepositoryImpl
 import com.deepak.flow.core.repository.ReminderRepository
@@ -29,6 +33,12 @@ class FlowApplication : Application() {
         private set
 
     lateinit var profileRepository: ProfileRepository
+        private set
+
+    lateinit var historyRepository: HistoryRepository
+        private set
+
+    lateinit var gymWorkoutRepository: GymWorkoutRepository
         private set
 
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -58,6 +68,12 @@ class FlowApplication : Application() {
                 FlowDatabase.MIGRATION_11_12,
                 FlowDatabase.MIGRATION_12_13,
                 FlowDatabase.MIGRATION_13_14,
+                FlowDatabase.MIGRATION_14_15,
+                FlowDatabase.MIGRATION_15_16,
+                FlowDatabase.MIGRATION_16_17,
+                FlowDatabase.MIGRATION_17_18,
+                FlowDatabase.MIGRATION_18_19,
+                FlowDatabase.MIGRATION_19_20,
             )
             .build()
 
@@ -70,6 +86,15 @@ class FlowApplication : Application() {
         )
         profileRepository = ProfileRepositoryImpl(
             dao = database.userProfileDao(),
+            waterDayDao = database.waterDayDao(),
+        )
+        historyRepository = HistoryRepositoryImpl(
+            historyDao = database.historyDao(),
+            waterDayDao = database.waterDayDao(),
+            profileDao = database.userProfileDao(),
+        )
+        gymWorkoutRepository = GymWorkoutRepositoryImpl(
+            dao = database.gymWorkoutDao(),
         )
         com.deepak.flow.core.widget.FlowWidgets.refresh(this)
         applicationScope.launch {

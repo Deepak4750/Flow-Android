@@ -19,15 +19,28 @@ import com.deepak.flow.FlowApplication
 import com.deepak.flow.FlowViewModelFactory
 import com.deepak.flow.app.navigation.FeatureSettingsViewModel
 import com.deepak.flow.app.navigation.FlowDrawerDestination
-import com.deepak.flow.app.navigation.FlowPlaceholderScreen
 import com.deepak.flow.app.navigation.FlowRoute
 import com.deepak.flow.app.navigation.navigateFromDrawer
 import com.deepak.flow.app.theme.FlowTheme
 import com.deepak.flow.core.update.AppUpdateViewModel
 import com.deepak.flow.core.widget.WidgetLaunch
 import com.deepak.flow.core.widget.widgetDestinationOrNull
+import com.deepak.flow.feature.gym.presentation.FreeWorkoutScreen
+import com.deepak.flow.feature.gym.presentation.FreeWorkoutViewModel
+import com.deepak.flow.feature.gym.presentation.FreeWorkoutViewModelFactory
+import com.deepak.flow.feature.gym.presentation.GymPlaceholderDestinationScreen
+import com.deepak.flow.feature.gym.presentation.GymScreen
 import com.deepak.flow.feature.home.presentation.HomeScreen
 import com.deepak.flow.feature.home.presentation.HomeViewModel
+import com.deepak.flow.feature.history.presentation.HistoryDayScreen
+import com.deepak.flow.feature.history.presentation.HistoryDayViewModel
+import com.deepak.flow.feature.history.presentation.HistoryDayViewModelFactory
+import com.deepak.flow.feature.history.presentation.HistoryScreen
+import com.deepak.flow.feature.history.presentation.HistoryTasksDetailScreen
+import com.deepak.flow.feature.history.presentation.HistoryTasksViewModel
+import com.deepak.flow.feature.history.presentation.HistoryViewModel
+import com.deepak.flow.feature.history.presentation.HistoryWaterDetailScreen
+import com.deepak.flow.feature.history.presentation.HistoryWaterViewModel
 import com.deepak.flow.feature.onboarding.presentation.OnboardingScreen
 import com.deepak.flow.feature.onboarding.presentation.OnboardingViewModel
 import com.deepak.flow.feature.reminder.presentation.CreateReminderScreen
@@ -154,25 +167,124 @@ fun FlowApp(
                     )
                 }
                 composable<FlowRoute.Gym> {
-                    FlowPlaceholderScreen(
-                        selected = FlowDrawerDestination.GYM,
+                    GymScreen(
                         userName = featureState.profileName,
                         remindersEnabled = featureState.remindersEnabled,
                         waterEnabled = featureState.waterEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onDestinationClick = onDrawerDestination,
+                        onNewRoutine = { navController.navigate(FlowRoute.GymNewRoutine) },
+                        onFreeWorkout = { navController.navigate(FlowRoute.GymFreeWorkout) },
+                    )
+                }
+                composable<FlowRoute.GymNewRoutine> {
+                    GymPlaceholderDestinationScreen(
+                        title = "New Routine",
+                        userName = featureState.profileName,
+                        remindersEnabled = featureState.remindersEnabled,
+                        waterEnabled = featureState.waterEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<FlowRoute.GymFreeWorkout> {
+                    val freeFactory = remember { FreeWorkoutViewModelFactory(app) }
+                    val viewModel: FreeWorkoutViewModel = viewModel(factory = freeFactory)
+                    FreeWorkoutScreen(
+                        viewModel = viewModel,
+                        userName = featureState.profileName,
+                        remindersEnabled = featureState.remindersEnabled,
+                        waterEnabled = featureState.waterEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onLeave = {
+                            navController.popBackStack(FlowRoute.Gym, inclusive = false)
+                        },
                     )
                 }
                 composable<FlowRoute.History> {
-                    FlowPlaceholderScreen(
-                        selected = FlowDrawerDestination.HISTORY,
+                    val viewModel: HistoryViewModel = viewModel(factory = factory)
+                    HistoryScreen(
+                        viewModel = viewModel,
                         userName = featureState.profileName,
                         remindersEnabled = featureState.remindersEnabled,
                         waterEnabled = featureState.waterEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onDestinationClick = onDrawerDestination,
+                        onDayClick = { dateEpochDay ->
+                            navController.navigate(FlowRoute.HistoryDay(dateEpochDay))
+                        },
+                    )
+                }
+                composable<FlowRoute.HistoryDay> { backStackEntry ->
+                    val route = backStackEntry.toRoute<FlowRoute.HistoryDay>()
+                    val dayFactory = remember(route.dateEpochDay) {
+                        HistoryDayViewModelFactory(app, route.dateEpochDay)
+                    }
+                    val viewModel: HistoryDayViewModel = viewModel(
+                        factory = dayFactory,
+                        key = "history-day-${route.dateEpochDay}",
+                    )
+                    HistoryDayScreen(
+                        viewModel = viewModel,
+                        userName = featureState.profileName,
+                        remindersEnabled = featureState.remindersEnabled,
+                        waterEnabled = featureState.waterEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onBack = { navController.popBackStack() },
+                        onTasksClick = {
+                            navController.navigate(FlowRoute.HistoryTasks(route.dateEpochDay))
+                        },
+                        onWaterClick = {
+                            navController.navigate(FlowRoute.HistoryWater(route.dateEpochDay))
+                        },
+                    )
+                }
+                composable<FlowRoute.HistoryTasks> { backStackEntry ->
+                    val route = backStackEntry.toRoute<FlowRoute.HistoryTasks>()
+                    val dayFactory = remember(route.dateEpochDay) {
+                        HistoryDayViewModelFactory(app, route.dateEpochDay)
+                    }
+                    val viewModel: HistoryTasksViewModel = viewModel(
+                        factory = dayFactory,
+                        key = "history-tasks-${route.dateEpochDay}",
+                    )
+                    HistoryTasksDetailScreen(
+                        viewModel = viewModel,
+                        userName = featureState.profileName,
+                        remindersEnabled = featureState.remindersEnabled,
+                        waterEnabled = featureState.waterEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                composable<FlowRoute.HistoryWater> { backStackEntry ->
+                    val route = backStackEntry.toRoute<FlowRoute.HistoryWater>()
+                    val dayFactory = remember(route.dateEpochDay) {
+                        HistoryDayViewModelFactory(app, route.dateEpochDay)
+                    }
+                    val viewModel: HistoryWaterViewModel = viewModel(
+                        factory = dayFactory,
+                        key = "history-water-${route.dateEpochDay}",
+                    )
+                    HistoryWaterDetailScreen(
+                        viewModel = viewModel,
+                        userName = featureState.profileName,
+                        remindersEnabled = featureState.remindersEnabled,
+                        waterEnabled = featureState.waterEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onBack = { navController.popBackStack() },
                     )
                 }
                 composable<FlowRoute.CreateReminder> {

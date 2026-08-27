@@ -9,7 +9,7 @@ import org.junit.Test
 class FlowDrawerDestinationTest {
 
     @Test
-    fun drawerOrder_isHomeThenFeaturesThenHistoryAboveSettings() {
+    fun drawerOrder_isHomeThenFeaturesThenGymThenHistoryAboveSettings() {
         assertEquals(
             listOf(
                 FlowDrawerDestination.HOME,
@@ -34,11 +34,18 @@ class FlowDrawerDestinationTest {
     }
 
     @Test
-    fun gymSessionsSitsDirectlyBelowWaterTracking() {
+    fun gymSitsDirectlyBelowWaterTracking() {
         val destinations = FlowDrawerDestination.entries
         val waterIndex = destinations.indexOf(FlowDrawerDestination.WATER)
         assertEquals(FlowDrawerDestination.GYM, destinations[waterIndex + 1])
         assertEquals("Gym", FlowDrawerDestination.GYM.label)
+    }
+
+    @Test
+    fun historySitsDirectlyBelowGym() {
+        val destinations = FlowDrawerDestination.entries
+        val gymIndex = destinations.indexOf(FlowDrawerDestination.GYM)
+        assertEquals(FlowDrawerDestination.HISTORY, destinations[gymIndex + 1])
     }
 
     @Test
@@ -51,7 +58,10 @@ class FlowDrawerDestinationTest {
     @Test
     fun tasksAndWaterHaveFeatureToggles() {
         assertEquals(
-            listOf(FlowDrawerDestination.REMINDERS, FlowDrawerDestination.WATER),
+            listOf(
+                FlowDrawerDestination.REMINDERS,
+                FlowDrawerDestination.WATER,
+            ),
             FlowDrawerDestination.entries.filter { it.isFeature },
         )
     }
@@ -79,12 +89,6 @@ class FlowDrawerDestinationTest {
         assertFalse(
             FlowDrawerDestination.WATER.isEnabled(
                 remindersEnabled = true,
-                waterEnabled = false,
-            ),
-        )
-        assertTrue(
-            FlowDrawerDestination.GYM.isEnabled(
-                remindersEnabled = false,
                 waterEnabled = false,
             ),
         )

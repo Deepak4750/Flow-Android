@@ -2,6 +2,8 @@ package com.deepak.flow.core.repository
 
 import com.deepak.flow.core.database.UserProfileDao
 import com.deepak.flow.core.database.UserProfileEntity
+import com.deepak.flow.core.database.WaterDayDao
+import com.deepak.flow.core.database.WaterDayEntity
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.model.WaterReminderSettings
@@ -16,6 +18,7 @@ import kotlinx.coroutines.sync.withLock
 
 class ProfileRepositoryImpl(
     private val dao: UserProfileDao,
+    private val waterDayDao: WaterDayDao,
 ) : ProfileRepository {
 
     private val waterIntakeMutex = Mutex()
@@ -150,14 +153,36 @@ class ProfileRepositoryImpl(
         addLog: List<Int>,
     ) {
         val existing = dao.getProfile()
+        val previousDay = existing?.waterIntakeEpochDay
+        val previousMl = existing?.waterIntakeMl ?: 0
+        if (previousDay != null && previousDay != epochDay && previousMl > 0) {
+            waterDayDao.upsert(
+                WaterDayEntity(
+                    dateEpochDay = previousDay,
+                    intakeMl = previousMl,
+                    addLog = existing?.waterAddLog.orEmpty(),
+                    goalMl = existing?.waterGoalMl,
+                ),
+            )
+        }
+        val coercedMl = millilitres.coerceAtLeast(0)
+        val encodedLog = encodeWaterAddLog(addLog)
+        waterDayDao.upsert(
+            WaterDayEntity(
+                dateEpochDay = epochDay,
+                intakeMl = coercedMl,
+                addLog = encodedLog,
+                goalMl = existing?.waterGoalMl,
+            ),
+        )
         dao.upsert(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
                 onboardingCompleted = existing?.onboardingCompleted ?: true,
-                waterIntakeMl = millilitres.coerceAtLeast(0),
+                waterIntakeMl = coercedMl,
                 waterIntakeEpochDay = epochDay,
-                waterAddLog = encodeWaterAddLog(addLog),
+                waterAddLog = encodedLog,
             ),
         )
     }

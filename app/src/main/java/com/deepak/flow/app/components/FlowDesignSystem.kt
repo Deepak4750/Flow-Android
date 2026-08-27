@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
@@ -30,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -40,23 +40,34 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -99,6 +110,9 @@ fun FlowSectionLabel(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelLarge,
         color = FlowTextTertiary,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
         modifier = modifier,
     )
 }
@@ -253,6 +267,9 @@ fun FlowMetaText(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelMedium,
         color = color,
+        maxLines = 1,
+        softWrap = false,
+        overflow = TextOverflow.Ellipsis,
         modifier = modifier,
     )
 }
@@ -288,37 +305,36 @@ fun FlowTextField(
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = if (suffix.isEmpty()) {
-                    Modifier.fillMaxWidth()
-                } else {
-                    Modifier.width(IntrinsicSize.Min)
-                },
+                modifier = Modifier.weight(1f),
                 textStyle = fieldStyle,
                 singleLine = singleLine,
                 minLines = minLines,
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 cursorBrush = SolidColor(FlowWhite),
                 decorationBox = { inner ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box {
-                            if (value.isEmpty() && placeholder.isNotEmpty()) {
-                                Text(
-                                    text = placeholder,
-                                    style = fieldStyle.copy(color = FlowTextDisabled),
-                                )
-                            }
-                            inner()
-                        }
-                        if (suffix.isNotEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        if (value.isEmpty() && placeholder.isNotEmpty()) {
                             Text(
-                                text = suffix,
-                                style = fieldStyle,
-                                modifier = Modifier.padding(start = FlowSpacing.xxs),
+                                text = placeholder,
+                                style = fieldStyle.copy(color = FlowTextDisabled),
+                                maxLines = if (singleLine) 1 else minLines,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
+                        inner()
                     }
                 },
             )
+            if (suffix.isNotEmpty()) {
+                Text(
+                    text = suffix,
+                    style = fieldStyle,
+                    color = FlowTextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(start = FlowSpacing.xxs),
+                )
+            }
         }
         FlowHairlineDivider()
     }
@@ -339,6 +355,7 @@ fun FlowButton(
     enabled: Boolean = true,
     variant: FlowButtonVariant = FlowButtonVariant.Primary,
     fillWidth: Boolean = true,
+    leadingIcon: ImageVector? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
@@ -391,12 +408,25 @@ fun FlowButton(
             .padding(horizontal = FlowSpacing.lg),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text.uppercase(),
-            style = MaterialTheme.typography.labelLarge,
-            color = foreground,
-            maxLines = 1,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (leadingIcon != null) {
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = null,
+                    tint = foreground,
+                    modifier = Modifier.size(FlowSizes.iconSm),
+                )
+                Spacer(modifier = Modifier.width(FlowSpacing.sm))
+            }
+            Text(
+                text = text.uppercase(),
+                style = MaterialTheme.typography.labelLarge,
+                color = foreground,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -435,6 +465,8 @@ fun FlowTextAction(
             style = MaterialTheme.typography.labelLarge,
             color = color,
             maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -732,6 +764,13 @@ fun FlowAccentSwatch(
 /** Wide enough for two digits at headline size; local to the stepper only. */
 private val StepperValueWidth = 56.dp
 
+/**
+ * Numeric stepper with − / value / +.
+ *
+ * When [allowBelowMinWhileEditing] is true, clearing the field lands on 0 while
+ * focused (cursor stays after the 0). Done keeps the keyboard open at 0; losing
+ * focus commits at least [min].
+ */
 @Composable
 fun FlowStepper(
     label: String,
@@ -744,7 +783,53 @@ fun FlowStepper(
     min: Int,
     max: Int,
     modifier: Modifier = Modifier,
+    allowBelowMinWhileEditing: Boolean = false,
 ) {
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    var focused by remember { mutableStateOf(false) }
+    var field by remember {
+        mutableStateOf(TextFieldValue(value.toString(), TextRange(value.toString().length)))
+    }
+
+    LaunchedEffect(value, focused) {
+        if (!focused || field.text != value.toString()) {
+            val text = value.toString()
+            // Keep the caret after the digits so backspace-to-0 does not jump
+            // the cursor in front of the zero.
+            field = TextFieldValue(text, TextRange(text.length))
+        }
+    }
+
+    fun commitAtLeastMin() {
+        val committed = value.coerceIn(min, max)
+        if (committed != value) {
+            onValueChange(committed.toString())
+        }
+    }
+
+    fun publishDigits(digits: String) {
+        when {
+            digits.isEmpty() && allowBelowMinWhileEditing -> {
+                field = TextFieldValue("0", TextRange(1))
+                onValueChange("0")
+            }
+            digits.isEmpty() -> Unit
+            else -> {
+                val parsed = digits.toIntOrNull() ?: return
+                val clamped = if (allowBelowMinWhileEditing && focused) {
+                    parsed.coerceIn(0, max)
+                } else {
+                    parsed.coerceIn(min, max)
+                }
+                val text = clamped.toString()
+                field = TextFieldValue(text, TextRange(text.length))
+                onValueChange(text)
+            }
+        }
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         if (label.isNotBlank()) {
             FlowSectionLabel(label)
@@ -768,15 +853,44 @@ fun FlowStepper(
                 contentAlignment = Alignment.Center,
             ) {
                 BasicTextField(
-                    value = value.toString(),
-                    onValueChange = onValueChange,
-                    modifier = Modifier.fillMaxWidth(),
+                    value = field,
+                    onValueChange = { next ->
+                        val digits = next.text.filter { it.isDigit() }.take(4)
+                        publishDigits(digits)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { state ->
+                            val wasFocused = focused
+                            focused = state.isFocused
+                            if (state.isFocused) {
+                                val text = field.text
+                                field = TextFieldValue(text, TextRange(text.length))
+                            }
+                            if (wasFocused && !state.isFocused && allowBelowMinWhileEditing) {
+                                commitAtLeastMin()
+                            }
+                        },
                     textStyle = MaterialTheme.typography.headlineMedium.copy(
                         color = FlowTextPrimary,
                         textAlign = TextAlign.Center,
                     ),
                     singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            if (allowBelowMinWhileEditing && value < min) {
+                                focusRequester.requestFocus()
+                                keyboard?.show()
+                            } else {
+                                focusManager.clearFocus()
+                            }
+                        },
+                    ),
                     cursorBrush = SolidColor(FlowWhite),
                 )
             }
@@ -1101,7 +1215,11 @@ fun AnimatedReveal(
         exit = fadeOut(tween(FlowMotion.FAST)) + shrinkVertically(tween(FlowMotion.FAST)),
         modifier = modifier,
     ) {
-        content()
+        // AnimatedVisibility is not a ColumnScope. Multiple children without a
+        // Column share one layout slot and draw on top of each other.
+        Column(modifier = Modifier.fillMaxWidth()) {
+            content()
+        }
     }
 }
 

@@ -42,7 +42,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Flow's own drawer sheet: a flat near-black panel with hairline separation.
- * Deliberately not a Material [androidx.compose.material3.ModalDrawerSheet] - 
+ * Deliberately not a Material [androidx.compose.material3.ModalDrawerSheet] -
  * no elevation, no rounded card items, no coloured selection pills.
  */
 @Composable
@@ -138,7 +138,9 @@ fun FlowShell(
                 onRemindersEnabledChange = onRemindersEnabledChange,
                 onWaterEnabledChange = onWaterEnabledChange,
                 onDestinationClick = { destination ->
-                    if (!destination.isEnabled(remindersEnabled, waterEnabled)) return@FlowDrawerContent
+                    if (!destination.isEnabled(remindersEnabled, waterEnabled)) {
+                        return@FlowDrawerContent
+                    }
                     scope.launch { drawerState.close() }
                     onDestinationClick(destination)
                 },
