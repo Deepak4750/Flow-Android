@@ -2,6 +2,7 @@ package com.deepak.flow.app.navigation
 
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.deepak.flow.core.gym.GymWorkoutType
 import kotlinx.serialization.Serializable
 
 sealed interface FlowRoute {
@@ -24,10 +25,19 @@ sealed interface FlowRoute {
     data object Gym : FlowRoute
 
     @Serializable
-    data object GymNewRoutine : FlowRoute
+    data object GymRoutine : FlowRoute
+
+    @Serializable
+    data object GymRoutineCatalog : FlowRoute
+
+    @Serializable
+    data class GymRoutineBuilder(val routineId: Long = 0L) : FlowRoute
 
     @Serializable
     data object GymFreeWorkout : FlowRoute
+
+    @Serializable
+    data object GymRoutineWorkout : FlowRoute
 
     @Serializable
     data object History : FlowRoute
@@ -105,8 +115,8 @@ fun NavController.navigateFromDrawer(destination: FlowDrawerDestination) {
     }
 }
 
-/** Open the active Free Workout screen from a notification tap. */
-fun NavController.navigateToActiveFreeWorkout() {
+/** Open the active workout screen from a notification tap. */
+fun NavController.navigateToActiveWorkout(type: GymWorkoutType = GymWorkoutType.FREE) {
     navigate(FlowRoute.Gym) {
         popUpTo(graph.findStartDestination().id) {
             saveState = true
@@ -114,9 +124,18 @@ fun NavController.navigateToActiveFreeWorkout() {
         launchSingleTop = true
         restoreState = true
     }
-    navigate(FlowRoute.GymFreeWorkout) {
+    val route = if (type == GymWorkoutType.ROUTINE) {
+        FlowRoute.GymRoutineWorkout
+    } else {
+        FlowRoute.GymFreeWorkout
+    }
+    navigate(route) {
         launchSingleTop = true
     }
+}
+
+fun NavController.navigateToActiveFreeWorkout() {
+    navigateToActiveWorkout(GymWorkoutType.FREE)
 }
 
 private fun NavController.navigateDrawerRoute(route: FlowRoute) {

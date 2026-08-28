@@ -11,8 +11,14 @@ object GymLogic {
     fun encodeTrackingFields(fields: Set<TrackingField>): String =
         fields.sortedBy { it.ordinal }.joinToString(",") { it.name }
 
-    fun workoutDisplayTitle(title: String): String =
-        title.trim().ifEmpty { "Free Workout" }
+    fun workoutDisplayTitle(
+        title: String,
+        type: GymWorkoutType = GymWorkoutType.FREE,
+    ): String {
+        val trimmed = title.trim()
+        if (trimmed.isNotEmpty()) return trimmed
+        return if (type == GymWorkoutType.ROUTINE) "Workout" else "Free Workout"
+    }
 
     fun decodeTrackingFields(raw: String?): Set<TrackingField> {
         if (raw.isNullOrBlank()) return emptySet()
@@ -322,6 +328,83 @@ object GymLogic {
     fun copyMeasurementsForNewSet(previous: GymWorkoutSet?): GymSetMeasurements {
         if (previous == null) return GymSetMeasurements()
         return previous.measurements.copy()
+    }
+
+    fun lastSavedSet(sets: List<GymWorkoutSet>): GymWorkoutSet? =
+        sets.filter { it.saved }.maxByOrNull { it.setNumber }
+
+    /**
+     * Seed for the next set: the user's last completed values in this occurrence,
+     * else the previous occurrence's final completed set.
+     */
+    fun seedMeasurementsForNextSet(
+        currentSets: List<GymWorkoutSet>,
+        previousOccurrenceLastSet: GymSetMeasurements?,
+    ): GymSetMeasurements {
+        val lastCompleted = lastSavedSet(currentSets)
+        if (lastCompleted != null) return lastCompleted.measurements.copy()
+        return previousOccurrenceLastSet?.copy() ?: GymSetMeasurements()
+    }
+
+    fun matchPreviousExercise(
+        previousExercises: List<GymWorkoutExercise>,
+        routineExerciseId: Long?,
+        exerciseStableKey: String?,
+        name: String,
+    ): GymWorkoutExercise? {
+        if (!exerciseStableKey.isNullOrBlank()) {
+            previousExercises.firstOrNull {
+                it.exerciseStableKey == exerciseStableKey
+            }?.let { return it }
+        }
+        if (routineExerciseId != null) {
+            previousExercises.firstOrNull { it.routineExerciseId == routineExerciseId }?.let {
+                return it
+            }
+        }
+        val key = name.trim().lowercase(Locale.US)
+        if (key.isEmpty()) return null
+        return previousExercises.firstOrNull { it.name.trim().lowercase(Locale.US) == key }
+    }
+
+    fun formatDayHeading(dayIndex: Int, title: String, isRestDay: Boolean): String {
+        val number = "Day ${dayIndex + 1}"
+        val trimmed = title.trim()
+        return when {
+            isRestDay && trimmed.isEmpty() -> "$number — Rest Day"
+            isRestDay -> "$number — $trimmed"
+            trimmed.isEmpty() -> number
+            else -> "$number — $trimmed"
+        }
+    }
+
+    fun dayHeadingPrefix(dayIndex: Int): String = "Day ${dayIndex + 1} — "
+
+    fun dayHeadingSuffixLabel(title: String, isRestDay: Boolean): String {
+        val trimmed = title.trim()
+        if (trimmed.isNotEmpty()) return trimmed
+        return if (isRestDay) "Rest Day" else "Day title"
+    }
+
+    fun cycleCompletesAfterDay(currentDayIndex: Int, dayCount: Int): Boolean =
+        dayCount > 0 && currentDayIndex == dayCount - 1
+
+    fun formatRoundsCompleted(count: Int): String = when (count) {
+        1 -> "1 round completed"
+        else -> "$count rounds completed"
+    }
+
+    fun isPlannedSet(plannedSetCount: Int): Boolean = plannedSetCount > 0
+
+    fun isLastPlannedSetNumber(setNumber: Int, plannedSetCount: Int): Boolean =
+        plannedSetCount > 0 && setNumber >= plannedSetCount
+
+    fun shouldAutoOpenNextPlannedSet(savedCount: Int, plannedSetCount: Int): Boolean =
+        plannedSetCount > 0 && savedCount < plannedSetCount
+
+    fun nextDayIndex(currentDayIndex: Int, dayCount: Int): Int {
+        if (dayCount <= 0) return 0
+        return (currentDayIndex + 1).mod(dayCount)
     }
 
     /** 1 kg = 2.20462262185 lb. lb→kg uses division by this factor. */

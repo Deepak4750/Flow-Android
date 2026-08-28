@@ -15,8 +15,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GymWorkoutEntity::class,
         GymWorkoutExerciseEntity::class,
         GymWorkoutSetEntity::class,
+        GymRoutineEntity::class,
+        GymRoutineDayEntity::class,
+        GymRoutineExerciseEntity::class,
     ],
-    version = 24,
+    version = 29,
     exportSchema = true,
 )
 @TypeConverters(DatabaseConverters::class)
@@ -27,6 +30,7 @@ abstract class FlowDatabase : RoomDatabase() {
     abstract fun waterDayDao(): WaterDayDao
     abstract fun historyDao(): HistoryDao
     abstract fun gymWorkoutDao(): GymWorkoutDao
+    abstract fun gymRoutineDao(): GymRoutineDao
 
     companion object {
         val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -580,6 +584,177 @@ abstract class FlowDatabase : RoomDatabase() {
                     column = "title",
                     spec = "TEXT NOT NULL DEFAULT ''",
                 )
+            }
+        }
+
+        val MIGRATION_24_25_STATEMENTS: List<String> = listOf(
+            """
+            CREATE TABLE IF NOT EXISTS gym_routines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                currentDayIndex INTEGER NOT NULL,
+                createdAtEpochMilli INTEGER NOT NULL,
+                updatedAtEpochMilli INTEGER NOT NULL
+            )
+            """.trimIndent(),
+            """
+            CREATE TABLE IF NOT EXISTS gym_routine_days (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                routineId INTEGER NOT NULL,
+                dayIndex INTEGER NOT NULL,
+                name TEXT NOT NULL
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_gym_routine_days_routineId ON gym_routine_days (routineId)",
+            """
+            CREATE TABLE IF NOT EXISTS gym_routine_exercises (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                dayId INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                trackingFields TEXT NOT NULL,
+                sortOrder INTEGER NOT NULL,
+                setCount INTEGER NOT NULL,
+                note TEXT NOT NULL
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_gym_routine_exercises_dayId ON gym_routine_exercises (dayId)",
+            "ALTER TABLE gym_workouts ADD COLUMN routineId INTEGER",
+            "ALTER TABLE gym_workouts ADD COLUMN dayIndex INTEGER",
+            "ALTER TABLE gym_workout_exercises ADD COLUMN plannedSetCount INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE gym_workout_exercises ADD COLUMN skipped INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE gym_workout_exercises ADD COLUMN routineExerciseId INTEGER",
+        )
+
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_24_25_STATEMENTS.take(5).forEach(db::execSQL)
+                SqliteSchema.addColumnIfMissing(db, "gym_workouts", "routineId", "INTEGER")
+                SqliteSchema.addColumnIfMissing(db, "gym_workouts", "dayIndex", "INTEGER")
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_workout_exercises",
+                    "plannedSetCount",
+                    "INTEGER NOT NULL DEFAULT 0",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_workout_exercises",
+                    "skipped",
+                    "INTEGER NOT NULL DEFAULT 0",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_workout_exercises",
+                    "routineExerciseId",
+                    "INTEGER",
+                )
+            }
+        }
+
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_routines",
+                    "repetitionCount",
+                    "INTEGER NOT NULL DEFAULT 4",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_routines",
+                    "completedCycles",
+                    "INTEGER NOT NULL DEFAULT 0",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_routine_days",
+                    "isRestDay",
+                    "INTEGER NOT NULL DEFAULT 0",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_routine_exercises",
+                    "stableKey",
+                    "TEXT NOT NULL DEFAULT ''",
+                )
+                db.execSQL(
+                    """
+                    UPDATE gym_routine_exercises
+                    SET stableKey = lower(hex(randomblob(16)))
+                    WHERE stableKey = '' OR stableKey IS NULL
+                    """.trimIndent(),
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_workouts",
+                    "restKind",
+                    "TEXT NOT NULL DEFAULT 'NONE'",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_workout_exercises",
+                    "exerciseStableKey",
+                    "TEXT",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "user_profile",
+                    "activeGymRoutineId",
+                    "INTEGER",
+                )
+            }
+        }
+
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_routines",
+                    "starred",
+                    "INTEGER NOT NULL DEFAULT 0",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_routines",
+                    "starredAtEpochMilli",
+                    "INTEGER",
+                )
+            }
+        }
+
+        val MIGRATION_27_28 = object : Migration(27, 28) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_routines",
+                    "roundsCompleted",
+                    "INTEGER NOT NULL DEFAULT 0",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "gym_routines",
+                    "roundFourCheckpointDismissed",
+                    "INTEGER NOT NULL DEFAULT 0",
+                )
+                if (SqliteSchema.hasColumn(db, "gym_routines", "completedCycles")) {
+                    db.execSQL(
+                        """
+                        UPDATE gym_routines
+                        SET roundsCompleted = completedCycles
+                        WHERE completedCycles > 0
+                          AND roundsCompleted = 0
+                        """.trimIndent(),
+                    )
+                }
+                SqliteSchema.rebuildGymRoutinesTable(db)
+            }
+        }
+
+        val MIGRATION_28_29 = object : Migration(28, 29) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                if (SqliteSchema.gymRoutinesNeedsRebuild(db)) {
+                    SqliteSchema.rebuildGymRoutinesTable(db)
+                }
             }
         }
     }

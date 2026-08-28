@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,27 +24,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.Text
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
@@ -61,6 +51,7 @@ import com.deepak.flow.app.components.FlowMetaText
 import com.deepak.flow.app.components.FlowScreenTitle
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSupportingText
+import com.deepak.flow.app.components.FlowSwipeDeleteRow
 import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.navigation.FlowDrawerDestination
@@ -84,9 +75,7 @@ import com.deepak.flow.core.gym.GymLogic
 import com.deepak.flow.core.gym.TrackingField
 import com.deepak.flow.core.gym.WeightUnit
 import com.deepak.flow.feature.gym.presentation.SetDraft
-import java.util.Locale
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,11 +118,12 @@ fun HistoryGymDayScreen(
                 }
             }
             uiState.workouts.forEach { workout ->
-                HistoryGymSwipeRow(
+                FlowSwipeDeleteRow(
                     modifier = Modifier.fillMaxWidth(),
                     resetKey = swipeResetKey,
                     onDelete = { viewModel.requestDeleteWorkout(workout.workoutId) },
-                    onClick = { onWorkoutClick(workout.workoutId) },
+                    onContentClick = { onWorkoutClick(workout.workoutId) },
+                    contentPadding = PaddingValues(vertical = FlowSpacing.sm),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -276,7 +266,7 @@ fun HistoryGymWorkoutScreen(
                     )
                 } else {
                     Text(
-                        text = uiState.titleLabel.uppercase(Locale.getDefault()),
+                        text = uiState.titleLabel,
                         style = MaterialTheme.typography.headlineSmall,
                         color = FlowTextPrimary,
                         modifier = Modifier
@@ -361,7 +351,7 @@ private fun HistoryGymExerciseBlock(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = exercise.name.uppercase(),
+            text = exercise.name,
             style = MaterialTheme.typography.titleLarge,
             color = FlowTextPrimary,
             modifier = Modifier.weight(1f),
@@ -756,96 +746,6 @@ private fun HistoryNoteWithLinks(note: String) {
 private fun trackingSummary(fields: Set<TrackingField>): String {
     if (fields.isEmpty()) return "Weight + Reps"
     return fields.sortedBy { it.ordinal }.joinToString(" + ") { it.label }
-}
-
-@Composable
-private fun HistoryGymSwipeRow(
-    onDelete: () -> Unit,
-    onClick: () -> Unit,
-    resetKey: Int,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val density = LocalDensity.current
-    val revealWidthPx = with(density) { 84.dp.toPx() }
-    val thresholdPx = revealWidthPx * 0.35f
-    val offsetAnim = remember { Animatable(0f) }
-    var revealed by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(resetKey) {
-        offsetAnim.snapTo(0f)
-        revealed = false
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
-    ) {
-        Row(
-            modifier = Modifier
-                .matchParentSize()
-                .background(Color(0xFF2A2222))
-                .clickable(
-                    enabled = revealed,
-                    role = Role.Button,
-                    onClick = onDelete,
-                )
-                .padding(horizontal = FlowSpacing.lg),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "Delete",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color(0xFFCF6679),
-            )
-        }
-        Column(
-            modifier = Modifier
-                .offset { IntOffset(offsetAnim.value.roundToInt(), 0) }
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.background)
-                .clickable(
-                    role = Role.Button,
-                    enabled = !revealed,
-                    onClick = onClick,
-                )
-                .pointerInput(revealWidthPx) {
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            scope.launch {
-                                val next = (offsetAnim.value + dragAmount)
-                                    .coerceIn(-revealWidthPx, 0f)
-                                offsetAnim.snapTo(next)
-                            }
-                        },
-                        onDragEnd = {
-                            scope.launch {
-                                if (-offsetAnim.value >= thresholdPx) {
-                                    offsetAnim.animateTo(
-                                        targetValue = -revealWidthPx,
-                                        animationSpec = spring(stiffness = 400f, dampingRatio = 0.82f),
-                                    )
-                                    revealed = true
-                                } else {
-                                    offsetAnim.animateTo(
-                                        targetValue = 0f,
-                                        animationSpec = spring(stiffness = 400f, dampingRatio = 0.82f),
-                                    )
-                                    revealed = false
-                                }
-                            }
-                        },
-                    )
-                }
-                .padding(vertical = FlowSpacing.sm),
-        ) {
-            content()
-        }
-    }
 }
 
 private fun filterDecimal(raw: String): String {

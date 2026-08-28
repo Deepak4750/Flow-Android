@@ -26,6 +26,7 @@ data class UserProfile(
     val waterActiveHoursStartMinutes: Int = WaterReminderSettings.DEFAULT_ACTIVE_START_MINUTES,
     val waterActiveHoursEndMinutes: Int = WaterReminderSettings.DEFAULT_ACTIVE_END_MINUTES,
     val keepDataOnUninstall: Boolean = DEFAULT_KEEP_DATA_ON_UNINSTALL,
+    val activeGymRoutineId: Long? = null,
 ) {
     companion object {
         const val DEFAULT_REMINDERS_ENABLED = true

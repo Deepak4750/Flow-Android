@@ -68,6 +68,44 @@ interface GymWorkoutDao {
     )
     fun observeLatestByTypeAndStatus(type: String, status: String): Flow<GymWorkoutEntity?>
 
+    @Query(
+        """
+        SELECT * FROM gym_workouts
+        WHERE status = :status
+        ORDER BY startedAtEpochMilli DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun getLatestByStatus(status: String): GymWorkoutEntity?
+
+    @Query(
+        """
+        SELECT * FROM gym_workouts
+        WHERE status = :status
+        ORDER BY startedAtEpochMilli DESC
+        LIMIT 1
+        """,
+    )
+    fun observeLatestByStatus(status: String): Flow<GymWorkoutEntity?>
+
+    @Query(
+        """
+        SELECT * FROM gym_workouts
+        WHERE type = :type
+          AND status = :status
+          AND routineId = :routineId
+          AND dayIndex = :dayIndex
+        ORDER BY endedAtEpochMilli DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun getLatestCompletedRoutineDay(
+        type: String,
+        status: String,
+        routineId: Long,
+        dayIndex: Int,
+    ): GymWorkoutEntity?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertWorkout(entity: GymWorkoutEntity): Long
 

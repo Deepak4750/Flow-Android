@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.gym.GymLimits
 import com.deepak.flow.core.gym.GymLogic
+import com.deepak.flow.core.gym.GymRestKind
 import com.deepak.flow.core.gym.GymSetMeasurements
 import com.deepak.flow.core.gym.GymWorkoutExercise
 import com.deepak.flow.core.gym.GymWorkoutSession
@@ -89,6 +90,7 @@ data class FreeWorkoutUiState(
     val awaitingNextAction: Boolean = false,
     val preferredWeightUnit: WeightUnit = WeightUnit.KG,
     val setRestSeconds: Int = GymLimits.SET_REST_DEFAULT_SECONDS,
+    val exerciseRestSeconds: Int = GymLimits.EXERCISE_REST_DEFAULT_SECONDS,
     val summary: GymWorkoutSummary? = null,
     val message: String? = null,
     /** Transient undo affordance after removing a saved set. */
@@ -99,12 +101,16 @@ data class FreeWorkoutUiState(
     val confirm: FreeWorkoutConfirm? = null,
     val setupTitle: String = "",
     val workoutId: Long? = null,
+    val workoutType: GymWorkoutType = GymWorkoutType.FREE,
 ) {
+    val isRoutine: Boolean
+        get() = session?.type == GymWorkoutType.ROUTINE || workoutType == GymWorkoutType.ROUTINE
+
     val workoutTitle: String
         get() = session?.title?.trim().takeUnless { it.isNullOrEmpty() } ?: setupTitle
 
     val workoutHeading: String
-        get() = GymLogic.workoutDisplayTitle(workoutTitle)
+        get() = GymLogic.workoutDisplayTitle(workoutTitle, session?.type ?: workoutType)
     val stopwatchLabel: String
         get() {
             val started = session?.startedAtEpochMilli ?: return "00:00:00"
@@ -128,7 +134,26 @@ data class FreeWorkoutUiState(
         }
 
     val upNextExercise: GymWorkoutExercise?
-        get() = currentExercise
+        get() {
+            val active = session ?: return null
+            val currentIndex = active.currentExerciseIndex
+            val nextIndex = active.exercises.indices.firstOrNull { index ->
+                index > currentIndex && !active.exercises[index].skipped
+            } ?: return null
+            return active.exercises[nextIndex]
+        }
+
+    val restKind: GymRestKind
+        get() = session?.restKind ?: GymRestKind.NONE
+
+    val showUpNextInSession: Boolean
+        get() {
+            if (!isRoutine || !setEditorVisible) return false
+            val planned = currentExercise?.plannedSetCount ?: 0
+            if (planned <= 0) return false
+            return GymLogic.isLastPlannedSetNumber(setDraft.setNumber, planned) &&
+                upNextExercise != null
+        }
 
     val upNextLabel: String
         get() = upNextExercise?.name ?: "Continue"
@@ -154,11 +179,27 @@ data class FreeWorkoutUiState(
                 setDraft.toMeasurements(displayWeightUnit),
             )
         }
+
+    val saveSetLabel: String
+        get() {
+            if (!isRoutine) return "Save Set"
+            if (setDraft.setId != null) return "Save Set"
+            val planned = currentExercise?.plannedSetCount ?: 0
+            return if (GymLogic.isLastPlannedSetNumber(setDraft.setNumber, planned)) {
+                "Complete Exercise"
+            } else {
+                "Complete Set"
+            }
+        }
+
+    val finishExerciseLabel: String
+        get() = if (isRoutine) "Complete Exercise" else "Save Exercise"
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FreeWorkoutViewModel(
     application: Application,
+    private val workoutType: GymWorkoutType = GymWorkoutType.FREE,
 ) : AndroidViewModel(application) {
 
     private val repository = (application as FlowApplication).gymWorkoutRepository
@@ -173,6 +214,7 @@ class FreeWorkoutViewModel(
     private val awaitingNextAction = MutableStateFlow(false)
     private val preferredWeightUnit = MutableStateFlow(WeightUnit.KG)
     private val setRestSeconds = MutableStateFlow(GymLimits.SET_REST_DEFAULT_SECONDS)
+    private val exerciseRestSeconds = MutableStateFlow(GymLimits.EXERCISE_REST_DEFAULT_SECONDS)
     private val summary = MutableStateFlow<GymWorkoutSummary?>(null)
     private val message = MutableStateFlow<String?>(null)
     private val setRemovedUndoVisible = MutableStateFlow(false)
@@ -196,7 +238,12 @@ class FreeWorkoutViewModel(
         val trackingFields: Set<TrackingField>,
         val note: String,
         val sets: List<GymWorkoutSet>,
+        val plannedSetCount: Int = 0,
+        val skipped: Boolean = false,
+        val routineExerciseId: Long? = null,
     )
+
+    private val previousSeeds = MutableStateFlow<Map<Long, GymSetMeasurements>>(emptyMap())
 
     private val sessionFlow = workoutId.flatMapLatest { id ->
         if (id == null) flowOf(null) else repository.observeSession(id)
@@ -218,6 +265,7 @@ class FreeWorkoutViewModel(
         val awaitingNextAction: Boolean,
         val preferredWeightUnit: WeightUnit,
         val setRestSeconds: Int,
+        val exerciseRestSeconds: Int,
         val summary: GymWorkoutSummary?,
         val message: String?,
         val setRemovedUndoVisible: Boolean,
@@ -235,18 +283,23 @@ class FreeWorkoutViewModel(
             Triple(composing, editor, awaiting)
         },
         combine(
-            combine(
-                preferredWeightUnit,
-                setRestSeconds,
-                summary,
-                message,
-                setRemovedUndoVisible,
-            ) { unit, rest, done, msg, setUndo ->
-                listOf(unit, rest, done, msg, setUndo)
+            combine(preferredWeightUnit, setRestSeconds, exerciseRestSeconds) { unit, setRest, exerciseRest ->
+                Triple(unit, setRest, exerciseRest)
             },
-            exerciseRemovedUndoVisible,
-        ) { prefs, exerciseUndo ->
-            prefs + exerciseUndo
+            combine(summary, message, setRemovedUndoVisible, exerciseRemovedUndoVisible) {
+                    done, msg, setUndo, exerciseUndo ->
+                listOf<Any?>(done, msg, setUndo, exerciseUndo)
+            },
+        ) { restPrefs, undoPrefs ->
+            listOf(
+                restPrefs.first,
+                restPrefs.second,
+                restPrefs.third,
+                undoPrefs[0],
+                undoPrefs[1],
+                undoPrefs[2],
+                undoPrefs[3],
+            )
         },
         combine(leaveWorkout, confirm, setupTitle) { leave, conf, setup ->
             Triple(leave, conf, setup)
@@ -261,10 +314,11 @@ class FreeWorkoutViewModel(
             awaitingNextAction = flags.third,
             preferredWeightUnit = prefs[0] as WeightUnit,
             setRestSeconds = prefs[1] as Int,
-            summary = prefs[2] as GymWorkoutSummary?,
-            message = prefs[3] as String?,
-            setRemovedUndoVisible = prefs[4] as Boolean,
-            exerciseRemovedUndoVisible = prefs[5] as Boolean,
+            exerciseRestSeconds = prefs[2] as Int,
+            summary = prefs[3] as GymWorkoutSummary?,
+            message = prefs[4] as String?,
+            setRemovedUndoVisible = prefs[5] as Boolean,
+            exerciseRemovedUndoVisible = prefs[6] as Boolean,
             leaveWorkout = leaveSetup.first,
             confirm = leaveSetup.second,
             setupTitle = leaveSetup.third,
@@ -306,6 +360,7 @@ class FreeWorkoutViewModel(
             awaitingNextAction = editor.awaitingNextAction,
             preferredWeightUnit = editor.preferredWeightUnit,
             setRestSeconds = editor.setRestSeconds,
+            exerciseRestSeconds = editor.exerciseRestSeconds,
             summary = editor.summary ?: session?.takeIf {
                 it.status == GymWorkoutStatus.COMPLETED
             }?.let { GymLogic.summarize(it, it.endedAtEpochMilli ?: now) },
@@ -315,6 +370,7 @@ class FreeWorkoutViewModel(
             leaveWorkout = editor.leaveWorkout,
             confirm = editor.confirm,
             setupTitle = editor.setupTitle,
+            workoutType = workoutType,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -336,6 +392,13 @@ class FreeWorkoutViewModel(
             setRestSeconds.value = GymLimits.clampSetRestSeconds(
                 profile?.gymSetRestSeconds ?: UserProfile.DEFAULT_GYM_SET_REST_SECONDS,
             )
+            exerciseRestSeconds.value = GymLimits.clampExerciseRestSeconds(
+                profile?.gymExerciseRestSeconds ?: UserProfile.DEFAULT_GYM_EXERCISE_REST_SECONDS,
+            )
+            if (workoutType == GymWorkoutType.ROUTINE) {
+                resumeRoutineSession(unit)
+                return@launch
+            }
             val active = repository.getActiveSession(GymWorkoutType.FREE)
             if (active == null) {
                 phase.value = FreeWorkoutPhase.SETUP
@@ -358,18 +421,13 @@ class FreeWorkoutViewModel(
                     } else {
                         repository.clearRest(session.id)
                         val refreshed = repository.getSession(active.id) ?: session
-                        val current = currentExerciseOf(refreshed)
-                        if (current != null && current.sets.any { it.saved }) {
-                            enterAwaitingNextAction()
-                        } else {
-                            startSetEditorForExercise(current)
-                        }
+                        afterRest(refreshed)
                     }
                 }
                 else -> {
                     val current = currentExerciseOf(session)
                     if (current != null && current.sets.any { it.saved }) {
-                        enterAwaitingNextAction()
+                        afterRest(session)
                     } else {
                         startSetEditorForExercise(current)
                     }
@@ -405,8 +463,35 @@ class FreeWorkoutViewModel(
                 setRestSeconds.value = GymLimits.clampSetRestSeconds(
                     profile?.gymSetRestSeconds ?: UserProfile.DEFAULT_GYM_SET_REST_SECONDS,
                 )
+                exerciseRestSeconds.value = GymLimits.clampExerciseRestSeconds(
+                    profile?.gymExerciseRestSeconds ?: UserProfile.DEFAULT_GYM_EXERCISE_REST_SECONDS,
+                )
             }
         }
+    }
+
+    private suspend fun handleRestEnded(session: GymWorkoutSession) {
+        val kind = session.restKind
+        repository.clearRest(session.id)
+        phase.value = FreeWorkoutPhase.SESSION
+        when (kind) {
+            GymRestKind.EXERCISE -> moveToNextRoutineExerciseInternal()
+            else -> afterRest(repository.getSession(session.id))
+        }
+    }
+
+    private suspend fun startSetRest(session: GymWorkoutSession) {
+        repository.startRest(session.id, setRestSeconds.value, GymRestKind.SET)
+        setEditorVisible.value = false
+        awaitingNextAction.value = false
+        phase.value = FreeWorkoutPhase.RESTING
+    }
+
+    private suspend fun startExerciseRest(session: GymWorkoutSession) {
+        repository.startRest(session.id, exerciseRestSeconds.value, GymRestKind.EXERCISE)
+        setEditorVisible.value = false
+        awaitingNextAction.value = false
+        phase.value = FreeWorkoutPhase.RESTING
     }
 
     private fun startClock() {
@@ -424,8 +509,7 @@ class FreeWorkoutViewModel(
                 ) {
                     val exerciseName = currentExerciseOf(session)?.name
                     repository.clearRest(session.id)
-                    phase.value = FreeWorkoutPhase.SESSION
-                    enterAwaitingNextAction()
+                    handleRestEnded(session.copy(restKind = session.restKind))
                     signalRestComplete(exerciseName)
                 }
                 delay(250)
@@ -557,6 +641,9 @@ class FreeWorkoutViewModel(
                 trackingFields = exercise.trackingFields,
                 note = exercise.note,
                 sets = exercise.sets.filter { it.saved },
+                plannedSetCount = exercise.plannedSetCount,
+                skipped = exercise.skipped,
+                routineExerciseId = exercise.routineExerciseId,
             )
             repository.deleteExercise(exerciseId)
             phase.value = FreeWorkoutPhase.SESSION
@@ -565,11 +652,17 @@ class FreeWorkoutViewModel(
             setDraft.value = SetDraft()
             val updated = workoutId.value?.let { repository.getSession(it) }
             if (updated == null || updated.exercises.isEmpty()) {
-                composingExercise.value = true
-                awaitingNextAction.value = false
-                exerciseDraft.value = ExerciseDraft()
-                setDraft.value = SetDraft(setNumber = 1)
-                setEditorVisible.value = true
+                if (workoutType == GymWorkoutType.ROUTINE) {
+                    composingExercise.value = false
+                    awaitingNextAction.value = false
+                    setEditorVisible.value = false
+                } else {
+                    composingExercise.value = true
+                    awaitingNextAction.value = false
+                    exerciseDraft.value = ExerciseDraft()
+                    setDraft.value = SetDraft(setNumber = 1)
+                    setEditorVisible.value = true
+                }
             } else {
                 composingExercise.value = false
                 enterAwaitingNextAction()
@@ -591,6 +684,9 @@ class FreeWorkoutViewModel(
                 trackingFields = pending.trackingFields,
                 note = pending.note,
                 sets = pending.sets,
+                plannedSetCount = pending.plannedSetCount,
+                skipped = pending.skipped,
+                routineExerciseId = pending.routineExerciseId,
             )
             composingExercise.value = false
             enterAwaitingNextAction()
@@ -688,30 +784,44 @@ class FreeWorkoutViewModel(
             val id = workoutId.value ?: return@launch
             repository.setCurrentExerciseIndex(id, index)
             composingExercise.value = false
-            enterAwaitingNextAction()
+            val session = repository.getSession(id) ?: return@launch
+            val exercise = session.exercises.getOrNull(index)
+            if (exercise?.skipped == true) {
+                repository.setExerciseSkipped(exercise.id, false)
+            }
+            afterRest(repository.getSession(id) ?: session)
         }
     }
 
     /** Finished with this exercise - open the next empty exercise inline. */
     fun finishExercise() {
         clearRestCompleteAlert()
-        startComposingExercise()
+        if (workoutType == GymWorkoutType.ROUTINE) {
+            viewModelScope.launch {
+                val session = uiState.value.session ?: return@launch
+                startExerciseRest(session)
+            }
+        } else {
+            startComposingExercise()
+        }
+    }
+
+    fun skipExercise() {
+        clearRestCompleteAlert()
+        viewModelScope.launch {
+            val session = uiState.value.session ?: return@launch
+            val exercise = uiState.value.currentExercise ?: return@launch
+            repository.setExerciseSkipped(exercise.id, true)
+            startExerciseRest(session)
+        }
     }
 
     fun addNewSet() {
         clearRestCompleteAlert()
-        val exercise = uiState.value.currentExercise ?: return
-        awaitingNextAction.value = false
-        composingExercise.value = false
-        val previous = exercise.sets.lastOrNull { it.saved }
-        setDraft.value = previous.toDraft(
-            setId = null,
-            exerciseId = exercise.id,
-            setNumber = GymLogic.nextSetNumber(exercise.sets),
-            displayUnit = preferredWeightUnit.value,
-        ).copy(failure = false)
-        setEditorVisible.value = true
-        phase.value = FreeWorkoutPhase.SESSION
+        val exercise = uiState.value.currentExercise
+            ?: latestSession.value?.let { currentExerciseOf(it) }
+            ?: return
+        openNewSet(exercise)
     }
 
     fun openEditSet(exercise: GymWorkoutExercise, set: GymWorkoutSet) {
@@ -805,7 +915,7 @@ class FreeWorkoutViewModel(
                     exerciseDraft.value = ExerciseDraft()
                     setEditorVisible.value = false
                     awaitingNextAction.value = false
-                    repository.startRest(session.id, setRestSeconds.value)
+                    repository.startRest(session.id, setRestSeconds.value, GymRestKind.SET)
                     phase.value = FreeWorkoutPhase.RESTING
                 }.onFailure {
                     message.value = it.message ?: "Couldn't save set."
@@ -832,8 +942,14 @@ class FreeWorkoutViewModel(
                     )
                     setEditorVisible.value = false
                     awaitingNextAction.value = false
-                    repository.startRest(session.id, setRestSeconds.value)
-                    phase.value = FreeWorkoutPhase.RESTING
+                    val planned = exercise.plannedSetCount
+                    val isLastPlanned = workoutType == GymWorkoutType.ROUTINE &&
+                        GymLogic.isLastPlannedSetNumber(draft.setNumber, planned)
+                    if (isLastPlanned) {
+                        startExerciseRest(session)
+                    } else {
+                        startSetRest(session)
+                    }
                 } else {
                     repository.updateSet(
                         setId = existingId,
@@ -853,10 +969,8 @@ class FreeWorkoutViewModel(
     fun skipRest() {
         viewModelScope.launch {
             val id = workoutId.value ?: return@launch
-            repository.clearRest(id)
-            phase.value = FreeWorkoutPhase.SESSION
-            enterAwaitingNextAction()
-            // Skip is intentional; no rest-complete vibration/notification.
+            val session = repository.getSession(id) ?: return@launch
+            handleRestEnded(session)
         }
     }
 
@@ -898,21 +1012,133 @@ class FreeWorkoutViewModel(
         phase.value = FreeWorkoutPhase.SESSION
     }
 
+    private fun afterRest(session: GymWorkoutSession?) {
+        val current = session?.let { currentExerciseOf(it) }
+        if (workoutType == GymWorkoutType.ROUTINE &&
+            current != null &&
+            !current.skipped &&
+            GymLogic.shouldAutoOpenNextPlannedSet(
+                savedCount = current.sets.count { it.saved },
+                plannedSetCount = current.plannedSetCount,
+            )
+        ) {
+            openNewSet(current)
+        } else if (workoutType == GymWorkoutType.ROUTINE &&
+            current != null &&
+            current.sets.none { it.saved }
+        ) {
+            startSetEditorForExercise(current)
+        } else {
+            enterAwaitingNextAction()
+        }
+    }
+
+    private fun openNewSet(exercise: GymWorkoutExercise) {
+        awaitingNextAction.value = false
+        composingExercise.value = false
+        setDraft.value = draftForNewSet(exercise)
+        setEditorVisible.value = true
+        phase.value = FreeWorkoutPhase.SESSION
+    }
+
     private fun startSetEditorForExercise(exercise: GymWorkoutExercise?) {
         if (exercise == null) {
+            if (workoutType == GymWorkoutType.ROUTINE) {
+                composingExercise.value = false
+                setEditorVisible.value = false
+                awaitingNextAction.value = false
+                return
+            }
             startComposingExercise()
             return
         }
         composingExercise.value = false
         awaitingNextAction.value = false
-        val previous = exercise.sets.lastOrNull { it.saved }
-        setDraft.value = previous.toDraft(
+        setDraft.value = draftForNewSet(exercise)
+        setEditorVisible.value = true
+    }
+
+    private fun draftForNewSet(exercise: GymWorkoutExercise): SetDraft {
+        val measurements = GymLogic.seedMeasurementsForNextSet(
+            currentSets = exercise.sets,
+            previousOccurrenceLastSet = previousSeeds.value[exercise.id],
+        )
+        val seeded = GymWorkoutSet(
+            workoutExerciseId = exercise.id,
+            setNumber = GymLogic.nextSetNumber(exercise.sets),
+            measurements = measurements,
+            failure = false,
+            saved = false,
+        )
+        return seeded.toDraft(
             setId = null,
             exerciseId = exercise.id,
-            setNumber = GymLogic.nextSetNumber(exercise.sets),
+            setNumber = seeded.setNumber,
             displayUnit = preferredWeightUnit.value,
         ).copy(failure = false)
-        setEditorVisible.value = true
+    }
+
+    private fun moveToNextRoutineExerciseInternal() {
+        viewModelScope.launch {
+            val session = uiState.value.session ?: return@launch
+            val currentIndex = session.currentExerciseIndex
+            val nextIndex = session.exercises.indices.firstOrNull { index ->
+                index > currentIndex && !session.exercises[index].skipped
+            }
+            composingExercise.value = false
+            if (nextIndex == null) {
+                setEditorVisible.value = false
+                awaitingNextAction.value = false
+                setDraft.value = SetDraft()
+                phase.value = FreeWorkoutPhase.SESSION
+                return@launch
+            }
+            repository.setCurrentExerciseIndex(session.id, nextIndex)
+            val updated = repository.getSession(session.id) ?: session
+            startSetEditorForExercise(currentExerciseOf(updated))
+        }
+    }
+
+    private fun moveToNextRoutineExercise() {
+        moveToNextRoutineExerciseInternal()
+    }
+
+    private suspend fun resumeRoutineSession(unit: WeightUnit) {
+        val id = repository.ensureActiveRoutineWorkout(unit)
+        if (id == null) {
+            leaveWorkout.value = true
+            return
+        }
+        workoutId.value = id
+        phase.value = FreeWorkoutPhase.SESSION
+        val session = repository.getSession(id) ?: return
+        loadPreviousSeeds(session)
+        when {
+            session.restEndsAtEpochMilli != null -> {
+                val remainingRest = GymLogic.remainingRestSeconds(
+                    session.restEndsAtEpochMilli,
+                    System.currentTimeMillis(),
+                )
+                if (remainingRest > 0) {
+                    phase.value = FreeWorkoutPhase.RESTING
+                    setEditorVisible.value = false
+                    awaitingNextAction.value = false
+                } else {
+                    repository.clearRest(session.id)
+                    afterRest(repository.getSession(id) ?: session)
+                }
+            }
+            else -> afterRest(session)
+        }
+        startClock()
+    }
+
+    private suspend fun loadPreviousSeeds(session: GymWorkoutSession) {
+        previousSeeds.value = if (session.type == GymWorkoutType.ROUTINE) {
+            repository.previousOccurrenceSeeds(session)
+        } else {
+            emptyMap()
+        }
     }
 
     private fun showSetRemovedUndo() {
@@ -940,7 +1166,15 @@ class FreeWorkoutViewModel(
     private fun signalRestComplete(exerciseName: String?) {
         val app = getApplication<Application>()
         vibrateRestComplete(app)
-        NotificationChannelManager.postRestCompleteNotification(app, exerciseName)
+        NotificationChannelManager.postRestCompleteNotification(
+            app,
+            exerciseName,
+            destination = if (workoutType == GymWorkoutType.ROUTINE) {
+                com.deepak.flow.core.widget.WidgetLaunch.DEST_GYM_ROUTINE_WORKOUT
+            } else {
+                com.deepak.flow.core.widget.WidgetLaunch.DEST_GYM_FREE_WORKOUT
+            },
+        )
     }
 
     private fun clearRestCompleteAlert() {
@@ -962,11 +1196,12 @@ class FreeWorkoutViewModel(
 
 class FreeWorkoutViewModelFactory(
     private val application: FlowApplication,
+    private val workoutType: GymWorkoutType = GymWorkoutType.FREE,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(FreeWorkoutViewModel::class.java)) {
-            return FreeWorkoutViewModel(application) as T
+            return FreeWorkoutViewModel(application, workoutType) as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }

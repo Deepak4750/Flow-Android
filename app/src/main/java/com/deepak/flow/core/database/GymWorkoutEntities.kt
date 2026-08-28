@@ -24,6 +24,9 @@ data class GymWorkoutEntity(
     val currentExerciseStartedAtEpochMilli: Long? = null,
     val starred: Boolean = false,
     val title: String = "",
+    val routineId: Long? = null,
+    val dayIndex: Int? = null,
+    val restKind: String = "NONE",
 )
 
 @Entity(
@@ -38,6 +41,10 @@ data class GymWorkoutExerciseEntity(
     val sortOrder: Int,
     val note: String = "",
     val trackingFields: String = "",
+    val plannedSetCount: Int = 0,
+    val skipped: Boolean = false,
+    val routineExerciseId: Long? = null,
+    val exerciseStableKey: String? = null,
 )
 
 @Entity(

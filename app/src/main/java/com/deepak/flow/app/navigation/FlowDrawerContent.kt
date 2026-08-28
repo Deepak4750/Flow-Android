@@ -182,7 +182,9 @@ fun FlowShell(
                         }
                     },
                     trailing = {
-                        FlowSectionLabel("Flow")
+                        if (onBack == null) {
+                            FlowSectionLabel("Flow")
+                        }
                     },
                 )
                 content()

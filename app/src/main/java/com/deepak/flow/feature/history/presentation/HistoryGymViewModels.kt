@@ -626,7 +626,7 @@ private fun GymWorkoutSession.toListItem(
     val summary = GymLogic.summarize(this, end)
     return HistoryGymWorkoutListItem(
         workoutId = id,
-        titleLabel = displayTitle(title).uppercase(Locale.getDefault()),
+        titleLabel = displayTitle(title),
         dateTimeLabel = dateTimeLabel,
         durationLabel = GymLogic.formatSummaryDuration(summary.durationSeconds),
         starred = starred,

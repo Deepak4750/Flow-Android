@@ -194,6 +194,19 @@ fun SettingsScreen(
                 max = GymLimits.SET_REST_MAX_SECONDS,
             )
 
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowStepper(
+                label = stringResource(R.string.settings_label_exercise_rest),
+                value = uiState.gymExerciseRestSeconds,
+                unitLabel = stringResource(R.string.settings_unit_seconds),
+                valueDescription = stringResource(R.string.settings_exercise_rest_value_description),
+                onValueChange = viewModel::onGymExerciseRestInput,
+                onIncrement = viewModel::incrementGymExerciseRest,
+                onDecrement = viewModel::decrementGymExerciseRest,
+                min = GymLimits.EXERCISE_REST_MIN_SECONDS,
+                max = GymLimits.EXERCISE_REST_MAX_SECONDS,
+            )
+
             FlowSectionBreak()
             FlowFieldHeading(
                 label = stringResource(R.string.settings_section_data),

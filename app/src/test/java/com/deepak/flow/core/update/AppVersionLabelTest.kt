@@ -6,10 +6,10 @@ import org.junit.Test
 class AppVersionLabelTest {
 
     @Test
-    fun showsNameCodeAndBeta() {
+    fun showsNameCodeAndStable() {
         assertEquals(
-            "1.1.1 (69) Beta",
-            formatInstalledVersionLabel(versionName = "1.1.1", versionCode = 69),
+            "1.3.0 (171) Stable",
+            formatInstalledVersionLabel(versionName = "1.3.0", versionCode = 171),
         )
     }
 }

@@ -347,6 +347,116 @@ class GymLogicTest {
         assertEquals("Free Workout", GymLogic.workoutDisplayTitle(""))
         assertEquals("Free Workout", GymLogic.workoutDisplayTitle("   "))
         assertEquals("Chest Day", GymLogic.workoutDisplayTitle("Chest Day"))
+        assertEquals("Workout", GymLogic.workoutDisplayTitle("", GymWorkoutType.ROUTINE))
+        assertEquals("Pull", GymLogic.workoutDisplayTitle("Pull", GymWorkoutType.ROUTINE))
+    }
+
+    @Test
+    fun seedMeasurementsForNextSet_usesLastCompletedThenPreviousOccurrence() {
+        val set1 = GymWorkoutSet(
+            setNumber = 1,
+            measurements = GymSetMeasurements(weight = 15.0, reps = 12),
+            saved = true,
+        )
+        val seeded = GymLogic.seedMeasurementsForNextSet(
+            currentSets = listOf(set1),
+            previousOccurrenceLastSet = GymSetMeasurements(weight = 20.0, reps = 8),
+        )
+        assertEquals(15.0, seeded.weight)
+        assertEquals(12, seeded.reps)
+
+        val firstOfNextWeek = GymLogic.seedMeasurementsForNextSet(
+            currentSets = emptyList(),
+            previousOccurrenceLastSet = GymSetMeasurements(weight = 25.0, reps = 8),
+        )
+        assertEquals(25.0, firstOfNextWeek.weight)
+        assertEquals(8, firstOfNextWeek.reps)
+
+        val firstEver = GymLogic.seedMeasurementsForNextSet(
+            currentSets = emptyList(),
+            previousOccurrenceLastSet = null,
+        )
+        assertNull(firstEver.weight)
+        assertNull(firstEver.reps)
+    }
+
+    @Test
+    fun shouldAutoOpenNextPlannedSet_stopsAtPlannedCount() {
+        assertTrue(GymLogic.shouldAutoOpenNextPlannedSet(savedCount = 1, plannedSetCount = 4))
+        assertTrue(GymLogic.shouldAutoOpenNextPlannedSet(savedCount = 0, plannedSetCount = 4))
+        assertFalse(GymLogic.shouldAutoOpenNextPlannedSet(savedCount = 4, plannedSetCount = 4))
+        assertFalse(GymLogic.shouldAutoOpenNextPlannedSet(savedCount = 1, plannedSetCount = 0))
+    }
+
+    @Test
+    fun isLastPlannedSetNumber_onlyWhenPlanned() {
+        assertTrue(GymLogic.isLastPlannedSetNumber(4, 4))
+        assertTrue(GymLogic.isLastPlannedSetNumber(5, 4))
+        assertFalse(GymLogic.isLastPlannedSetNumber(3, 4))
+        assertFalse(GymLogic.isLastPlannedSetNumber(1, 0))
+    }
+
+    @Test
+    fun matchPreviousExercise_prefersStableKeyThenRoutineExerciseIdThenName() {
+        val previous = listOf(
+            GymWorkoutExercise(
+                id = 1,
+                name = "Bench Press",
+                sortOrder = 0,
+                routineExerciseId = 10L,
+                exerciseStableKey = "key-a",
+            ),
+            GymWorkoutExercise(
+                id = 2,
+                name = "Squat",
+                sortOrder = 1,
+                routineExerciseId = 11L,
+                exerciseStableKey = "key-b",
+            ),
+        )
+        assertEquals(
+            1L,
+            GymLogic.matchPreviousExercise(
+                previous,
+                routineExerciseId = 99L,
+                exerciseStableKey = "key-a",
+                name = "Other",
+            )?.id,
+        )
+        assertEquals(
+            1L,
+            GymLogic.matchPreviousExercise(previous, routineExerciseId = 10L, exerciseStableKey = null, name = "Other")?.id,
+        )
+        assertEquals(
+            2L,
+            GymLogic.matchPreviousExercise(previous, routineExerciseId = null, exerciseStableKey = null, name = "squat")?.id,
+        )
+    }
+
+    @Test
+    fun formatDayHeading_structuralNumberAndTitle() {
+        assertEquals("Day 1", GymLogic.formatDayHeading(0, "", false))
+        assertEquals("Day 1 — Chest", GymLogic.formatDayHeading(0, "Chest", false))
+        assertEquals("Day 3 — Rest Day", GymLogic.formatDayHeading(2, "", true))
+    }
+
+    @Test
+    fun formatRoundsCompleted_usesSingularForOne() {
+        assertEquals("0 rounds completed", GymLogic.formatRoundsCompleted(0))
+        assertEquals("1 round completed", GymLogic.formatRoundsCompleted(1))
+        assertEquals("4 rounds completed", GymLogic.formatRoundsCompleted(4))
+    }
+
+    @Test
+    fun cycleCompletesAfterDay_onlyOnLastDay() {
+        assertTrue(GymLogic.cycleCompletesAfterDay(2, 3))
+        assertFalse(GymLogic.cycleCompletesAfterDay(0, 3))
+    }
+
+    @Test
+    fun nextDayIndex_wrapsAround() {
+        assertEquals(1, GymLogic.nextDayIndex(0, 3))
+        assertEquals(0, GymLogic.nextDayIndex(2, 3))
     }
 }
 

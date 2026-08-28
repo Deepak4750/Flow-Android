@@ -21,16 +21,25 @@ import com.deepak.flow.app.navigation.FeatureSettingsViewModel
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowRoute
 import com.deepak.flow.app.navigation.navigateFromDrawer
-import com.deepak.flow.app.navigation.navigateToActiveFreeWorkout
+import com.deepak.flow.app.navigation.navigateToActiveWorkout
 import com.deepak.flow.app.theme.FlowTheme
+import com.deepak.flow.core.gym.GymWorkoutType
 import com.deepak.flow.core.update.AppUpdateViewModel
 import com.deepak.flow.core.widget.WidgetLaunch
 import com.deepak.flow.core.widget.widgetDestinationOrNull
 import com.deepak.flow.feature.gym.presentation.FreeWorkoutScreen
 import com.deepak.flow.feature.gym.presentation.FreeWorkoutViewModel
 import com.deepak.flow.feature.gym.presentation.FreeWorkoutViewModelFactory
-import com.deepak.flow.feature.gym.presentation.GymPlaceholderDestinationScreen
-import com.deepak.flow.feature.gym.presentation.GymScreen
+import com.deepak.flow.feature.gym.presentation.GymChoiceScreen
+import com.deepak.flow.feature.gym.presentation.GymHomeViewModel
+import com.deepak.flow.feature.gym.presentation.GymHomeViewModelFactory
+import com.deepak.flow.feature.gym.presentation.GymRoutineScreen
+import com.deepak.flow.feature.gym.presentation.RoutineBuilderScreen
+import com.deepak.flow.feature.gym.presentation.RoutineBuilderViewModel
+import com.deepak.flow.feature.gym.presentation.RoutineBuilderViewModelFactory
+import com.deepak.flow.feature.gym.presentation.RoutineCatalogScreen
+import com.deepak.flow.feature.gym.presentation.RoutineCatalogViewModel
+import com.deepak.flow.feature.gym.presentation.RoutineCatalogViewModelFactory
 import com.deepak.flow.feature.home.presentation.HomeScreen
 import com.deepak.flow.feature.home.presentation.HomeViewModel
 import com.deepak.flow.feature.history.presentation.HistoryDayScreen
@@ -98,7 +107,8 @@ fun FlowApp(
                 when (destinationKey) {
                     WidgetLaunch.DEST_WATER -> navController.navigateFromDrawer(FlowDrawerDestination.WATER)
                     WidgetLaunch.DEST_REMINDERS -> navController.navigateFromDrawer(FlowDrawerDestination.REMINDERS)
-                    WidgetLaunch.DEST_GYM_FREE_WORKOUT -> navController.navigateToActiveFreeWorkout()
+                    WidgetLaunch.DEST_GYM_FREE_WORKOUT -> navController.navigateToActiveWorkout(GymWorkoutType.FREE)
+                    WidgetLaunch.DEST_GYM_ROUTINE_WORKOUT -> navController.navigateToActiveWorkout(GymWorkoutType.ROUTINE)
                 }
                 if (launchIntent != null) {
                     onLaunchIntentConsumed()
@@ -179,7 +189,10 @@ fun FlowApp(
                     )
                 }
                 composable<FlowRoute.Gym> {
-                    GymScreen(
+                    val gymHomeFactory = remember { GymHomeViewModelFactory(app) }
+                    val gymHomeViewModel: GymHomeViewModel = viewModel(factory = gymHomeFactory)
+                    GymChoiceScreen(
+                        viewModel = gymHomeViewModel,
                         userName = featureState.profileName,
                         remindersEnabled = featureState.remindersEnabled,
                         waterEnabled = featureState.waterEnabled,
@@ -188,13 +201,23 @@ fun FlowApp(
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
                         onDestinationClick = onDrawerDestination,
-                        onNewRoutine = { navController.navigate(FlowRoute.GymNewRoutine) },
+                        onRoutine = { navController.navigate(FlowRoute.GymRoutine) },
                         onFreeWorkout = { navController.navigate(FlowRoute.GymFreeWorkout) },
+                        onContinueWorkout = { type ->
+                            when (type) {
+                                GymWorkoutType.ROUTINE ->
+                                    navController.navigate(FlowRoute.GymRoutineWorkout)
+                                GymWorkoutType.FREE ->
+                                    navController.navigate(FlowRoute.GymFreeWorkout)
+                            }
+                        },
                     )
                 }
-                composable<FlowRoute.GymNewRoutine> {
-                    GymPlaceholderDestinationScreen(
-                        title = "New Routine",
+                composable<FlowRoute.GymRoutine> {
+                    val gymHomeFactory = remember { GymHomeViewModelFactory(app) }
+                    val gymHomeViewModel: GymHomeViewModel = viewModel(factory = gymHomeFactory)
+                    GymRoutineScreen(
+                        viewModel = gymHomeViewModel,
                         userName = featureState.profileName,
                         remindersEnabled = featureState.remindersEnabled,
                         waterEnabled = featureState.waterEnabled,
@@ -204,11 +227,87 @@ fun FlowApp(
                         onGymEnabledChange = featureViewModel::setGymEnabled,
                         onDestinationClick = onDrawerDestination,
                         onBack = { navController.popBackStack() },
+                        onOpenRoutines = { navController.navigate(FlowRoute.GymRoutineCatalog) },
+                        onEditRoutine = { routineId ->
+                            navController.navigate(FlowRoute.GymRoutineBuilder(routineId = routineId))
+                        },
+                        onStartRoutine = { navController.navigate(FlowRoute.GymRoutineWorkout) },
+                    )
+                }
+                composable<FlowRoute.GymRoutineCatalog> {
+                    val catalogFactory = remember { RoutineCatalogViewModelFactory(app) }
+                    val catalogViewModel: RoutineCatalogViewModel = viewModel(factory = catalogFactory)
+                    RoutineCatalogScreen(
+                        viewModel = catalogViewModel,
+                        userName = featureState.profileName,
+                        remindersEnabled = featureState.remindersEnabled,
+                        waterEnabled = featureState.waterEnabled,
+                        gymEnabled = featureState.gymEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onGymEnabledChange = featureViewModel::setGymEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onBack = { navController.popBackStack() },
+                        onOpenRoutine = { routineId ->
+                            navController.navigate(FlowRoute.GymRoutineBuilder(routineId = routineId))
+                        },
+                        onNewRoutine = {
+                            navController.navigate(FlowRoute.GymRoutineBuilder(routineId = 0L))
+                        },
+                    )
+                }
+                composable<FlowRoute.GymRoutineBuilder> { entry ->
+                    val args = entry.toRoute<FlowRoute.GymRoutineBuilder>()
+                    val editingRoutineId = args.routineId.takeIf { it > 0L }
+                    val builderFactory = remember(editingRoutineId) {
+                        RoutineBuilderViewModelFactory(app, editingRoutineId)
+                    }
+                    val builderViewModel: RoutineBuilderViewModel = viewModel(
+                        key = "routineBuilder-${args.routineId}",
+                        factory = builderFactory,
+                    )
+                    RoutineBuilderScreen(
+                        viewModel = builderViewModel,
+                        userName = featureState.profileName,
+                        remindersEnabled = featureState.remindersEnabled,
+                        waterEnabled = featureState.waterEnabled,
+                        gymEnabled = featureState.gymEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onGymEnabledChange = featureViewModel::setGymEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onLeave = { navController.popBackStack() },
                     )
                 }
                 composable<FlowRoute.GymFreeWorkout> {
-                    val freeFactory = remember { FreeWorkoutViewModelFactory(app) }
-                    val viewModel: FreeWorkoutViewModel = viewModel(factory = freeFactory)
+                    val freeFactory = remember { FreeWorkoutViewModelFactory(app, GymWorkoutType.FREE) }
+                    val viewModel: FreeWorkoutViewModel = viewModel(
+                        key = "freeWorkout",
+                        factory = freeFactory,
+                    )
+                    FreeWorkoutScreen(
+                        viewModel = viewModel,
+                        userName = featureState.profileName,
+                        remindersEnabled = featureState.remindersEnabled,
+                        waterEnabled = featureState.waterEnabled,
+                        gymEnabled = featureState.gymEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onGymEnabledChange = featureViewModel::setGymEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onLeave = {
+                            navController.popBackStack(FlowRoute.Gym, inclusive = false)
+                        },
+                    )
+                }
+                composable<FlowRoute.GymRoutineWorkout> {
+                    val routineFactory = remember {
+                        FreeWorkoutViewModelFactory(app, GymWorkoutType.ROUTINE)
+                    }
+                    val viewModel: FreeWorkoutViewModel = viewModel(
+                        key = "routineWorkout",
+                        factory = routineFactory,
+                    )
                     FreeWorkoutScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,

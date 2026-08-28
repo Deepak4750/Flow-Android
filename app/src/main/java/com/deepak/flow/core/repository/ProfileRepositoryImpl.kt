@@ -357,6 +357,7 @@ private fun UserProfileEntity?.toUpsertEntity(
         ?: WaterReminderSettings.DEFAULT_ACTIVE_END_MINUTES,
     keepDataOnUninstall: Boolean = this?.keepDataOnUninstall
         ?: UserProfile.DEFAULT_KEEP_DATA_ON_UNINSTALL,
+    activeGymRoutineId: Long? = this?.activeGymRoutineId,
 ) = UserProfileEntity(
     displayName = displayName,
     nickname = nickname,
@@ -381,6 +382,7 @@ private fun UserProfileEntity?.toUpsertEntity(
     waterActiveHoursStartMinutes = waterActiveHoursStartMinutes,
     waterActiveHoursEndMinutes = waterActiveHoursEndMinutes,
     keepDataOnUninstall = keepDataOnUninstall,
+    activeGymRoutineId = activeGymRoutineId,
 )
 
 private fun UserProfileEntity.toDomain() = UserProfile(
@@ -407,4 +409,5 @@ private fun UserProfileEntity.toDomain() = UserProfile(
     waterActiveHoursStartMinutes = waterActiveHoursStartMinutes,
     waterActiveHoursEndMinutes = waterActiveHoursEndMinutes,
     keepDataOnUninstall = keepDataOnUninstall,
+    activeGymRoutineId = activeGymRoutineId,
 )

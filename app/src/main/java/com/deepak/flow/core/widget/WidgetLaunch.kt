@@ -8,6 +8,7 @@ object WidgetLaunch {
     const val DEST_WATER = "water"
     const val DEST_REMINDERS = "reminders"
     const val DEST_GYM_FREE_WORKOUT = "gym_free_workout"
+    const val DEST_GYM_ROUTINE_WORKOUT = "gym_routine_workout"
 }
 
 fun Intent.putWidgetDestination(destination: String): Intent =

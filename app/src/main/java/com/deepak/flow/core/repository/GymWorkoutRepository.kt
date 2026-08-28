@@ -1,5 +1,6 @@
 package com.deepak.flow.core.repository
 
+import com.deepak.flow.core.gym.GymRoutine
 import com.deepak.flow.core.gym.GymSetMeasurements
 import com.deepak.flow.core.gym.GymWorkoutSession
 import com.deepak.flow.core.gym.GymWorkoutSet
@@ -9,10 +10,12 @@ import com.deepak.flow.core.gym.WeightUnit
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Reusable workout-session API. Free Workout and future Routine workouts both use this.
+ * Reusable workout-session API. Free Workout and Routine workouts both use this.
  */
 interface GymWorkoutRepository {
     fun observeActiveSession(type: GymWorkoutType): Flow<GymWorkoutSession?>
+
+    fun observeAnyActiveSession(): Flow<GymWorkoutSession?>
 
     fun observeSession(workoutId: Long): Flow<GymWorkoutSession?>
 
@@ -27,11 +30,15 @@ interface GymWorkoutRepository {
 
     suspend fun getActiveSession(type: GymWorkoutType): GymWorkoutSession?
 
+    suspend fun getAnyActiveSession(): GymWorkoutSession?
+
     suspend fun getSession(workoutId: Long): GymWorkoutSession?
 
     suspend fun startFreeWorkout(weightUnit: WeightUnit = WeightUnit.KG): Long
 
     suspend fun ensureActiveFreeWorkout(weightUnit: WeightUnit = WeightUnit.KG): Long
+
+    suspend fun ensureActiveRoutineWorkout(weightUnit: WeightUnit = WeightUnit.KG): Long?
 
     suspend fun setWeightUnit(workoutId: Long, unit: WeightUnit)
 
@@ -42,6 +49,9 @@ interface GymWorkoutRepository {
         name: String,
         trackingFields: Set<TrackingField>,
         note: String = "",
+        plannedSetCount: Int = 0,
+        routineExerciseId: Long? = null,
+        exerciseStableKey: String? = null,
     ): Long
 
     suspend fun updateExercise(
@@ -50,6 +60,8 @@ interface GymWorkoutRepository {
         trackingFields: Set<TrackingField>,
         note: String,
     )
+
+    suspend fun setExerciseSkipped(exerciseId: Long, skipped: Boolean)
 
     suspend fun deleteExercise(exerciseId: Long)
 
@@ -81,7 +93,12 @@ interface GymWorkoutRepository {
         setNumber: Int,
     ): Long
 
-    suspend fun startRest(workoutId: Long, durationSeconds: Int, nowEpochMilli: Long = System.currentTimeMillis())
+    suspend fun startRest(
+        workoutId: Long,
+        durationSeconds: Int,
+        kind: com.deepak.flow.core.gym.GymRestKind = com.deepak.flow.core.gym.GymRestKind.SET,
+        nowEpochMilli: Long = System.currentTimeMillis(),
+    )
 
     /**
      * Extends the active rest end time without changing the saved default duration.
@@ -116,6 +133,39 @@ interface GymWorkoutRepository {
         trackingFields: Set<TrackingField>,
         note: String,
         sets: List<GymWorkoutSet>,
+        plannedSetCount: Int = 0,
+        skipped: Boolean = false,
+        routineExerciseId: Long? = null,
+        exerciseStableKey: String? = null,
     ): Long
-}
 
+    fun observeRoutines(): Flow<List<GymRoutine>>
+
+    suspend fun setActiveRoutine(routineId: Long)
+
+    suspend fun skipRoutineDay(routineId: Long, nowEpochMilli: Long = System.currentTimeMillis())
+
+    suspend fun confirmRestDay(routineId: Long, nowEpochMilli: Long = System.currentTimeMillis())
+
+    suspend fun dismissRoundFourCheckpoint(routineId: Long)
+
+    suspend fun resetAllRoundsCompleted()
+
+    suspend fun getPrimaryRoutine(): GymRoutine?
+
+    suspend fun getRoutine(routineId: Long): GymRoutine?
+
+    suspend fun saveRoutine(routine: GymRoutine): Long
+
+    suspend fun deleteRoutine(routineId: Long)
+
+    suspend fun setRoutineStarred(routineId: Long, starred: Boolean)
+
+    /**
+     * Last completed set of each exercise from the previous occurrence of this
+     * routine day, keyed by this session's exercise id.
+     */
+    suspend fun previousOccurrenceSeeds(session: GymWorkoutSession): Map<Long, GymSetMeasurements>
+
+    fun observePrimaryRoutine(): Flow<GymRoutine?>
+}

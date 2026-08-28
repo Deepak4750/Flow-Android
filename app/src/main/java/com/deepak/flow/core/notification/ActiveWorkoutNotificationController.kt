@@ -5,6 +5,7 @@ import com.deepak.flow.core.gym.GymWorkoutSession
 import com.deepak.flow.core.gym.GymWorkoutStatus
 import com.deepak.flow.core.gym.GymWorkoutType
 import com.deepak.flow.core.repository.GymWorkoutRepository
+import com.deepak.flow.core.widget.WidgetLaunch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -28,7 +29,7 @@ class ActiveWorkoutNotificationController(
     fun start() {
         if (observeJob != null) return
         observeJob = scope.launch {
-            repository.observeActiveSession(GymWorkoutType.FREE)
+            repository.observeAnyActiveSession()
                 .distinctUntilChanged()
                 .collectLatest { session ->
                     if (session == null || session.status != GymWorkoutStatus.ACTIVE) {
@@ -42,7 +43,7 @@ class ActiveWorkoutNotificationController(
 
     /** Re-post immediately if an active Free Workout still exists (e.g. after swipe). */
     suspend fun restoreIfActive() {
-        val session = repository.getActiveSession(GymWorkoutType.FREE)
+        val session = repository.getAnyActiveSession()
         if (session == null || session.status != GymWorkoutStatus.ACTIVE) {
             NotificationChannelManager.cancelActiveWorkoutNotification(appContext)
             return
@@ -53,7 +54,7 @@ class ActiveWorkoutNotificationController(
     private suspend fun tickWhileActive(initial: GymWorkoutSession) {
         var latest = initial
         while (currentCoroutineContext().isActive) {
-            val fresh = repository.getActiveSession(GymWorkoutType.FREE)
+            val fresh = repository.getAnyActiveSession()
             if (fresh == null || fresh.status != GymWorkoutStatus.ACTIVE) {
                 NotificationChannelManager.cancelActiveWorkoutNotification(appContext)
                 return
@@ -77,6 +78,11 @@ class ActiveWorkoutNotificationController(
             workoutStartedAtEpochMilli = session.startedAtEpochMilli,
             exerciseStartedAtEpochMilli = session.currentExerciseStartedAtEpochMilli,
             nowEpochMilli = nowEpochMilli,
+            destination = if (session.type == GymWorkoutType.ROUTINE) {
+                WidgetLaunch.DEST_GYM_ROUTINE_WORKOUT
+            } else {
+                WidgetLaunch.DEST_GYM_FREE_WORKOUT
+            },
         )
     }
 }

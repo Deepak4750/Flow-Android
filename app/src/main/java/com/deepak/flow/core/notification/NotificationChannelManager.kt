@@ -179,6 +179,7 @@ object NotificationChannelManager {
         workoutStartedAtEpochMilli: Long,
         exerciseStartedAtEpochMilli: Long?,
         nowEpochMilli: Long = System.currentTimeMillis(),
+        destination: String = WidgetLaunch.DEST_GYM_FREE_WORKOUT,
     ) {
         createChannel(context)
         val manager = NotificationManagerCompat.from(context)
@@ -197,7 +198,7 @@ object NotificationChannelManager {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putWidgetDestination(WidgetLaunch.DEST_GYM_FREE_WORKOUT)
+                putWidgetDestination(destination)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -234,7 +235,11 @@ object NotificationChannelManager {
      * One-shot alert when Set Rest reaches zero naturally (not Skip).
      * Separate from the ongoing WORKOUT IN PROGRESS notification.
      */
-    fun postRestCompleteNotification(context: Context, exerciseName: String?) {
+    fun postRestCompleteNotification(
+        context: Context,
+        exerciseName: String?,
+        destination: String = WidgetLaunch.DEST_GYM_FREE_WORKOUT,
+    ) {
         createChannel(context)
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return
@@ -245,7 +250,7 @@ object NotificationChannelManager {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putWidgetDestination(WidgetLaunch.DEST_GYM_FREE_WORKOUT)
+                putWidgetDestination(destination)
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

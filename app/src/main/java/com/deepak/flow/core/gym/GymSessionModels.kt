@@ -29,6 +29,11 @@ data class GymWorkoutExercise(
     val note: String = "",
     val trackingFields: Set<TrackingField> = emptySet(),
     val sets: List<GymWorkoutSet> = emptyList(),
+    /** Planned sets from the routine. 0 means unbounded (Free Workout). */
+    val plannedSetCount: Int = 0,
+    val skipped: Boolean = false,
+    val routineExerciseId: Long? = null,
+    val exerciseStableKey: String? = null,
 )
 
 /**
@@ -50,6 +55,9 @@ data class GymWorkoutSession(
     val starred: Boolean = false,
     val title: String = "",
     val exercises: List<GymWorkoutExercise> = emptyList(),
+    val routineId: Long? = null,
+    val dayIndex: Int? = null,
+    val restKind: GymRestKind = GymRestKind.NONE,
 )
 
 data class GymWorkoutSummary(

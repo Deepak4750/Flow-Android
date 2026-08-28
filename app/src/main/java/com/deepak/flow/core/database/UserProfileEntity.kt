@@ -31,4 +31,5 @@ data class UserProfileEntity(
     val waterActiveHoursStartMinutes: Int = 480,
     val waterActiveHoursEndMinutes: Int = 1380,
     val keepDataOnUninstall: Boolean = true,
+    val activeGymRoutineId: Long? = null,
 )

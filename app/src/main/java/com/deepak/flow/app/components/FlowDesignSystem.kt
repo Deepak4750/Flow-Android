@@ -2,7 +2,9 @@ package com.deepak.flow.app.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -11,11 +13,14 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -44,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +61,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -71,9 +79,11 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import com.deepak.flow.R
 import com.deepak.flow.app.theme.FlowAccent
 import com.deepak.flow.core.model.formatDailyProgressPercent
@@ -281,6 +291,143 @@ fun FlowHairlineDivider(modifier: Modifier = Modifier) {
         thickness = FlowSizes.hairline,
         color = FlowBorder,
     )
+}
+
+/** Pinned undo banner after swipe delete. Appearance only; callers own timing and logic. */
+@Composable
+fun FlowUndoBanner(
+    message: String,
+    onUndo: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(FlowSurfaceRaised)
+            .padding(horizontal = FlowSpacing.md, vertical = FlowSpacing.sm),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = FlowTextPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        FlowTextAction(text = "Undo", onClick = onUndo)
+        Spacer(modifier = Modifier.width(FlowSpacing.md))
+        FlowTextAction(text = "Dismiss", onClick = onDismiss)
+    }
+}
+
+/** Swipe-to-reveal delete row using Flow destructive styling. Gesture behavior is unchanged. */
+@Composable
+fun FlowSwipeDeleteRow(
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    resetKey: Int = 0,
+    onContentClick: (() -> Unit)? = null,
+    contentPadding: PaddingValues = PaddingValues(0.dp),
+    content: @Composable () -> Unit,
+) {
+    if (!enabled) {
+        content()
+        return
+    }
+
+    val density = LocalDensity.current
+    val revealWidthPx = with(density) { 84.dp.toPx() }
+    val thresholdPx = revealWidthPx * 0.35f
+    val offsetAnim = remember { Animatable(0f) }
+    var revealed by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(resetKey) {
+        offsetAnim.snapTo(0f)
+        revealed = false
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
+    ) {
+        Row(
+            modifier = Modifier
+                .matchParentSize()
+                .background(FlowSurface)
+                .clickable(
+                    enabled = revealed,
+                    role = Role.Button,
+                    onClick = onDelete,
+                )
+                .padding(horizontal = FlowSpacing.lg),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Delete",
+                style = MaterialTheme.typography.labelLarge,
+                color = FlowError,
+            )
+        }
+        val contentModifier = Modifier
+            .offset { IntOffset(offsetAnim.value.roundToInt(), 0) }
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .then(
+                if (onContentClick != null) {
+                    Modifier.clickable(
+                        role = Role.Button,
+                        enabled = !revealed,
+                        onClick = onContentClick,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .pointerInput(revealWidthPx) {
+                detectHorizontalDragGestures(
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        scope.launch {
+                            val next = (offsetAnim.value + dragAmount)
+                                .coerceIn(-revealWidthPx, 0f)
+                            offsetAnim.snapTo(next)
+                        }
+                    },
+                    onDragEnd = {
+                        scope.launch {
+                            if (-offsetAnim.value >= thresholdPx) {
+                                offsetAnim.animateTo(
+                                    targetValue = -revealWidthPx,
+                                    animationSpec = spring(
+                                        stiffness = 400f,
+                                        dampingRatio = 0.82f,
+                                    ),
+                                )
+                                revealed = true
+                            } else {
+                                offsetAnim.animateTo(
+                                    targetValue = 0f,
+                                    animationSpec = spring(
+                                        stiffness = 400f,
+                                        dampingRatio = 0.82f,
+                                    ),
+                                )
+                                revealed = false
+                            }
+                        }
+                    },
+                )
+            }
+            .padding(contentPadding)
+        Column(modifier = contentModifier) {
+            content()
+        }
+    }
 }
 
 @Composable
@@ -946,8 +1093,9 @@ fun FlowScreenTopBar(
 }
 
 /**
- * Back navigation plus the screen's name. The title sits on the screen's left
- * edge rather than beside the back button, so it lines up with everything below it.
+ * Back navigation plus the screen title. Matches the sub-screen rhythm used inside
+ * [com.deepak.flow.app.navigation.FlowShell]: back in the top bar, then
+ * [FlowScreenTitle] on the content edge below.
  */
 @Composable
 fun FlowScreenHeader(
@@ -969,12 +1117,7 @@ fun FlowScreenHeader(
             },
             trailing = trailing,
         )
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.labelLarge,
-            color = FlowTextTertiary,
-            modifier = Modifier.semantics { heading() },
-        )
+        FlowScreenTitle(title)
     }
 }
 

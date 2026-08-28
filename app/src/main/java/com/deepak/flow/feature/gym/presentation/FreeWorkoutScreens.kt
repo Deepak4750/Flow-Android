@@ -52,7 +52,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.util.Locale
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowButtonVariant
 import com.deepak.flow.app.components.FlowChip
@@ -64,13 +63,13 @@ import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSupportingText
 import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.components.FlowTextField
+import com.deepak.flow.app.components.FlowUndoBanner
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowShell
 import com.deepak.flow.app.theme.FlowAccent
 import com.deepak.flow.app.theme.FlowMotion
 import com.deepak.flow.app.theme.FlowSizes
 import com.deepak.flow.app.theme.FlowSpacing
-import com.deepak.flow.app.theme.FlowSurfaceRaised
 import com.deepak.flow.app.theme.FlowTextDisabled
 import com.deepak.flow.app.theme.FlowTextPrimary
 import com.deepak.flow.app.theme.FlowTextSecondary
@@ -147,8 +146,10 @@ fun FreeWorkoutScreen(
             }
             uiState.phase == FreeWorkoutPhase.RESTING -> {
                 RestPane(
+                    restKind = uiState.restKind,
                     remainingLabel = uiState.restRemainingLabel,
-                    exercise = uiState.currentExercise,
+                    currentExercise = uiState.currentExercise,
+                    nextExercise = uiState.upNextExercise,
                     weightUnit = uiState.displayWeightUnit,
                     onSkip = viewModel::skipRest,
                     onMinusTen = { viewModel.addRestSeconds(-10) },
@@ -185,6 +186,7 @@ fun FreeWorkoutScreen(
                     uiState = uiState,
                     onFinishExercise = viewModel::finishExercise,
                     onAddNewSet = viewModel::addNewSet,
+                    onSkipExercise = viewModel::skipExercise,
                     onEditExercise = viewModel::openEditExercise,
                     onSelectExercise = viewModel::selectExercise,
                     onDraftChange = viewModel::onSetDraftChange,
@@ -234,6 +236,7 @@ private fun SessionPane(
     uiState: FreeWorkoutUiState,
     onFinishExercise: () -> Unit,
     onAddNewSet: () -> Unit,
+    onSkipExercise: () -> Unit,
     onEditExercise: (GymWorkoutExercise) -> Unit,
     onSelectExercise: (Int) -> Unit,
     onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
@@ -304,11 +307,16 @@ private fun SessionPane(
                         onDeleteSet = onDeleteSet,
                         onAddNewSet = onAddNewSet,
                         onFinishExercise = onFinishExercise,
+                        onSkipExercise = onSkipExercise.takeIf { uiState.isRoutine },
+                        saveSetLabel = uiState.saveSetLabel,
+                        finishExerciseLabel = uiState.finishExerciseLabel,
                         onStepWeight = onStepWeight,
                         onStepReps = onStepReps,
                         onStepIncline = onStepIncline,
                         onStepResistance = onStepResistance,
                         onStepRounds = onStepRounds,
+                        showUpNext = isActive && uiState.showUpNextInSession,
+                        upNextExercise = uiState.upNextExercise,
                     )
                     if (index < exercises.lastIndex || uiState.composingExercise) {
                         Spacer(modifier = Modifier.height(FlowSpacing.xl))
@@ -317,7 +325,7 @@ private fun SessionPane(
                     }
                 }
             }
-            if (uiState.composingExercise) {
+            if (uiState.composingExercise && !uiState.isRoutine) {
                 item(key = "composer") {
                     InlineExerciseComposer(
                         draft = uiState.exerciseDraft,
@@ -344,13 +352,15 @@ private fun SessionPane(
         }
 
         if (uiState.setRemovedUndoVisible) {
-            SetRemovedUndoBanner(
+            FlowUndoBanner(
+                message = "Set removed",
                 onUndo = onUndoDeleteSet,
                 onDismiss = onDismissSetRemovedUndo,
             )
         }
         if (uiState.exerciseRemovedUndoVisible) {
-            ExerciseRemovedUndoBanner(
+            FlowUndoBanner(
+                message = "Exercise removed",
                 onUndo = onUndoDeleteExercise,
                 onDismiss = onDismissExerciseRemovedUndo,
             )
@@ -394,7 +404,7 @@ private fun WorkoutPinnedHeader(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 FlowScreenTitle(
-                    text = workoutHeading.uppercase(Locale.getDefault()),
+                    text = workoutHeading,
                     maxLines = 1,
                 )
                 Spacer(modifier = Modifier.height(FlowSpacing.xxs))
@@ -508,11 +518,16 @@ private fun ExerciseBlock(
     onDeleteSet: (Long) -> Unit,
     onAddNewSet: () -> Unit,
     onFinishExercise: () -> Unit,
+    onSkipExercise: (() -> Unit)?,
+    saveSetLabel: String,
+    finishExerciseLabel: String,
     onStepWeight: (Boolean) -> Unit,
     onStepReps: (Boolean) -> Unit,
     onStepIncline: (Boolean) -> Unit,
     onStepResistance: (Boolean) -> Unit,
     onStepRounds: (Boolean) -> Unit,
+    showUpNext: Boolean = false,
+    upNextExercise: GymWorkoutExercise? = null,
 ) {
     Row(
         modifier = Modifier
@@ -529,12 +544,18 @@ private fun ExerciseBlock(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = exercise.name.uppercase(),
+                text = exercise.name,
                 style = MaterialTheme.typography.titleLarge,
                 color = FlowTextPrimary,
             )
             Spacer(modifier = Modifier.height(2.dp))
-            FlowMetaText(trackingSummary(exercise.trackingFields))
+            FlowMetaText(
+                if (exercise.skipped) {
+                    "Skipped"
+                } else {
+                    trackingSummary(exercise.trackingFields)
+                },
+            )
         }
         FlowTextAction(text = "Edit", onClick = onEditExercise)
     }
@@ -589,13 +610,31 @@ private fun ExerciseBlock(
         }
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
         FlowButton(
-            text = "Save Set",
+            text = saveSetLabel,
             onClick = onSaveSet,
             enabled = canSaveSet,
         )
         if (setDraft.setId != null) {
             Spacer(modifier = Modifier.height(FlowSpacing.sm))
             FlowTextAction(text = "Cancel edit", onClick = onClearEditingSet)
+        }
+        if (onSkipExercise != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowTextAction(text = "Skip Exercise", onClick = onSkipExercise)
+        }
+        if (showUpNext && upNextExercise != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            FlowSectionLabel("Up next")
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            Text(
+                text = upNextExercise.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = FlowTextPrimary,
+            )
+            if (upNextExercise.plannedSetCount > 0) {
+                Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+                FlowMetaText("${upNextExercise.plannedSetCount} sets")
+            }
         }
     }
 
@@ -608,10 +647,14 @@ private fun ExerciseBlock(
         )
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
         FlowButton(
-            text = "Save Exercise",
+            text = finishExerciseLabel,
             onClick = onFinishExercise,
             variant = FlowButtonVariant.Secondary,
         )
+        if (onSkipExercise != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowTextAction(text = "Skip Exercise", onClick = onSkipExercise)
+        }
     }
 }
 
@@ -674,56 +717,6 @@ private fun SavedSetRow(
         )
     }
     FlowHairlineDivider()
-}
-
-@Composable
-private fun ExerciseRemovedUndoBanner(
-    onUndo: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(FlowSurfaceRaised)
-            .padding(horizontal = FlowSpacing.md, vertical = FlowSpacing.sm),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Exercise removed",
-            style = MaterialTheme.typography.bodyMedium,
-            color = FlowTextPrimary,
-            modifier = Modifier.weight(1f),
-        )
-        FlowTextAction(text = "Undo", onClick = onUndo)
-        Spacer(modifier = Modifier.width(FlowSpacing.sm))
-        FlowTextAction(text = "Dismiss", onClick = onDismiss)
-    }
-}
-
-@Composable
-private fun SetRemovedUndoBanner(
-    onUndo: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(FlowSurfaceRaised)
-            .padding(horizontal = FlowSpacing.md, vertical = FlowSpacing.sm),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Set removed",
-            style = MaterialTheme.typography.bodyMedium,
-            color = FlowTextPrimary,
-            modifier = Modifier.weight(1f),
-        )
-        FlowTextAction(text = "Undo", onClick = onUndo)
-        Spacer(modifier = Modifier.width(FlowSpacing.sm))
-        FlowTextAction(text = "Dismiss", onClick = onDismiss)
-    }
 }
 
 @Composable
@@ -1031,7 +1024,7 @@ private fun CompactValueField(
 }
 
 @Composable
-private fun TrackingFieldChips(
+internal fun TrackingFieldChips(
     fields: Set<TrackingField>,
     onToggle: (TrackingField) -> Unit,
 ) {
@@ -1132,20 +1125,23 @@ private fun ExerciseEditorPane(
 
 @Composable
 private fun RestPane(
+    restKind: com.deepak.flow.core.gym.GymRestKind,
     remainingLabel: String,
-    exercise: GymWorkoutExercise?,
+    currentExercise: GymWorkoutExercise?,
+    nextExercise: GymWorkoutExercise?,
     weightUnit: WeightUnit,
     onSkip: () -> Unit,
     onMinusTen: () -> Unit,
     onAddTen: () -> Unit,
 ) {
+    val isExerciseRest = restKind == com.deepak.flow.core.gym.GymRestKind.EXERCISE
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .fillMaxHeight()
             .verticalScroll(rememberScrollState()),
     ) {
-        FlowSectionLabel("Set Rest")
+        FlowSectionLabel(if (isExerciseRest) "Exercise Rest" else "Set Rest")
         Spacer(modifier = Modifier.height(FlowSpacing.xl))
         Text(
             text = remainingLabel,
@@ -1184,18 +1180,33 @@ private fun RestPane(
                 fillWidth = false,
             )
         }
-        Spacer(modifier = Modifier.height(FlowSpacing.xxl))
-        FlowHairlineDivider()
-        Spacer(modifier = Modifier.height(FlowSpacing.lg))
-        FlowSectionLabel("Current exercise")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        if (exercise != null) {
+        if (isExerciseRest && nextExercise != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.xxl))
+            FlowHairlineDivider()
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            FlowSectionLabel("Next")
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
             Text(
-                text = exercise.name.uppercase(),
+                text = nextExercise.name,
                 style = MaterialTheme.typography.headlineSmall,
                 color = FlowTextPrimary,
             )
-            val saved = exercise.sets.filter { it.saved }
+            if (nextExercise.plannedSetCount > 0) {
+                Spacer(modifier = Modifier.height(FlowSpacing.xs))
+                FlowMetaText("${nextExercise.plannedSetCount} sets")
+            }
+        } else if (!isExerciseRest && currentExercise != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.xxl))
+            FlowHairlineDivider()
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            FlowSectionLabel("Current exercise")
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            Text(
+                text = currentExercise.name,
+                style = MaterialTheme.typography.headlineSmall,
+                color = FlowTextPrimary,
+            )
+            val saved = currentExercise.sets.filter { it.saved }
             if (saved.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(FlowSpacing.md))
                 saved.forEach { set ->
@@ -1209,7 +1220,7 @@ private fun RestPane(
                         Text(
                             text = GymLogic.formatCompactSetLine(
                                 set,
-                                exercise.trackingFields,
+                                currentExercise.trackingFields,
                                 weightUnit,
                             ),
                             style = MaterialTheme.typography.titleMedium,
@@ -1222,14 +1233,12 @@ private fun RestPane(
                     }
                 }
             }
-        } else {
-            FlowSupportingText("Continue")
         }
     }
 }
 
 @Composable
-private fun NoteToggle(
+internal fun NoteToggle(
     expanded: Boolean,
     onToggle: () -> Unit,
 ) {
@@ -1379,7 +1388,7 @@ private fun NoteWithLinks(note: String) {
     )
 }
 
-private fun trackingSummary(fields: Set<TrackingField>): String {
+internal fun trackingSummary(fields: Set<TrackingField>): String {
     if (fields.isEmpty()) return "Weight + Reps"
     return fields.sortedBy { it.ordinal }.joinToString(" + ") { it.label }
 }

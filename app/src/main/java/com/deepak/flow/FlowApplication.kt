@@ -24,6 +24,11 @@ import kotlinx.coroutines.launch
 
 class FlowApplication : Application() {
 
+    companion object {
+        private const val PREFS_NAME = "flow_app_state"
+        private const val KEY_RESET_ROUNDS_V164 = "reset_rounds_v164"
+    }
+
     lateinit var database: FlowDatabase
         private set
 
@@ -82,6 +87,11 @@ class FlowApplication : Application() {
                 FlowDatabase.MIGRATION_21_22,
                 FlowDatabase.MIGRATION_22_23,
                 FlowDatabase.MIGRATION_23_24,
+                FlowDatabase.MIGRATION_24_25,
+                FlowDatabase.MIGRATION_25_26,
+                FlowDatabase.MIGRATION_26_27,
+                FlowDatabase.MIGRATION_27_28,
+                FlowDatabase.MIGRATION_28_29,
             )
             .build()
 
@@ -98,6 +108,8 @@ class FlowApplication : Application() {
         )
         gymWorkoutRepository = GymWorkoutRepositoryImpl(
             dao = database.gymWorkoutDao(),
+            routineDao = database.gymRoutineDao(),
+            profileDao = database.userProfileDao(),
         )
         historyRepository = HistoryRepositoryImpl(
             historyDao = database.historyDao(),
@@ -115,8 +127,16 @@ class FlowApplication : Application() {
         com.deepak.flow.core.widget.FlowWidgets.refresh(this)
         applicationScope.launch {
             notificationScheduler.syncWaterReminder(profileRepository.getProfile())
+            resetRoundsCompletedOnceIfNeeded()
         }
         observeKeepDataCopy()
+    }
+
+    private suspend fun resetRoundsCompletedOnceIfNeeded() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_RESET_ROUNDS_V164, false)) return
+        gymWorkoutRepository.resetAllRoundsCompleted()
+        prefs.edit().putBoolean(KEY_RESET_ROUNDS_V164, true).apply()
     }
 
     private fun observeKeepDataCopy() {
