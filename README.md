@@ -189,7 +189,9 @@ JVM unit tests cover scheduling, widgets, notifications, gym logic, Keep Data, a
 
 ## License
 
-**No license has been chosen for this project yet.** You may inspect the source, but redistribution terms are not defined until a `LICENSE` file is added.
+Flow is licensed under the [Apache License, Version 2.0](LICENSE).
+
+Copyright 2026 Deepak
 
 ---
 

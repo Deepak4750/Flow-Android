@@ -5,7 +5,7 @@ Thank you for looking at Flow.
 ## Before you start
 
 - Flow is a personal, offline-first Android app. Changes should respect privacy, minimal UI, and calm copy.
-- There is **no license file yet**. Do not assume you may redistribute modified builds until a license is added.
+- Flow is licensed under the [Apache License, Version 2.0](LICENSE).
 - Do not commit secrets, keystores, `local.properties`, APKs, databases, or personal device dumps.
 
 ## Development setup
