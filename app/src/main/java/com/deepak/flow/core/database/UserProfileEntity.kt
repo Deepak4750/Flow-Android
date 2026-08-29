@@ -3,6 +3,7 @@ package com.deepak.flow.core.database
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.deepak.flow.core.model.SnoozeSettings
+import com.deepak.flow.core.model.UserProfile
 
 @Entity(tableName = "user_profile")
 data class UserProfileEntity(
@@ -13,9 +14,9 @@ data class UserProfileEntity(
     val onboardingCompleted: Boolean,
     val snoozeEnabled: Boolean = SnoozeSettings.DEFAULT_ENABLED,
     val snoozeIntervalMinutes: Int = SnoozeSettings.DEFAULT_INTERVAL_MINUTES,
-    val remindersEnabled: Boolean = true,
-    val waterEnabled: Boolean = false,
-    val gymEnabled: Boolean = true,
+    val remindersEnabled: Boolean = UserProfile.DEFAULT_REMINDERS_ENABLED,
+    val waterEnabled: Boolean = UserProfile.DEFAULT_WATER_ENABLED,
+    val gymEnabled: Boolean = UserProfile.DEFAULT_GYM_ENABLED,
     val gymWeightUnit: String = "KG",
     val gymSetRestSeconds: Int = 90,
     val gymExerciseRestSeconds: Int = 120,

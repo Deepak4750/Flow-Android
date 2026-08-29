@@ -1,5 +1,6 @@
 package com.deepak.flow.core.model
 
+import com.deepak.flow.core.database.UserProfileEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -8,15 +9,43 @@ import org.junit.Test
 class UserProfileTest {
 
     @Test
-    fun remindersStayOnByDefault() {
-        assertTrue(UserProfile().remindersEnabled)
-        assertTrue(null.remindersFeatureEnabled())
+    fun remindersStartOffForFreshProfile() {
+        assertFalse(UserProfile().remindersEnabled)
+        assertFalse(null.remindersFeatureEnabled())
     }
 
     @Test
-    fun waterStartsOffUntilTurnedOn() {
+    fun waterStartsOffForFreshProfile() {
         assertFalse(UserProfile().waterEnabled)
         assertFalse(null.waterFeatureEnabled())
+    }
+
+    @Test
+    fun gymStartsOffForFreshProfile() {
+        assertFalse(UserProfile().gymEnabled)
+        assertFalse(null.gymFeatureEnabled())
+    }
+
+    @Test
+    fun waterRemindersStayOffUntilTurnedOn() {
+        assertFalse(UserProfile().waterRemindersEnabled)
+        assertFalse(
+            UserProfile(waterEnabled = true, waterRemindersEnabled = false).waterDrinkRemindersOn(),
+        )
+    }
+
+    @Test
+    fun storedFeatureFlagsArePreserved() {
+        assertFalse(UserProfile(remindersEnabled = false).remindersEnabled)
+        assertTrue(UserProfile(remindersEnabled = true).remindersEnabled)
+        assertFalse(UserProfile(waterEnabled = false).waterEnabled)
+        assertTrue(UserProfile(waterEnabled = true).waterEnabled)
+        assertFalse(UserProfile(gymEnabled = false).gymEnabled)
+        assertTrue(UserProfile(gymEnabled = true).gymEnabled)
+        assertFalse(UserProfileEntity(waterEnabled = false, displayName = null, nickname = null, onboardingCompleted = true).waterEnabled)
+        assertTrue(UserProfileEntity(waterEnabled = true, displayName = null, nickname = null, onboardingCompleted = true).waterEnabled)
+        assertTrue(UserProfileEntity(remindersEnabled = true, displayName = null, nickname = null, onboardingCompleted = true).remindersEnabled)
+        assertTrue(UserProfileEntity(gymEnabled = true, displayName = null, nickname = null, onboardingCompleted = true).gymEnabled)
     }
 
     @Test

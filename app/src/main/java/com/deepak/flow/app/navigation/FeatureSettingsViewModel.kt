@@ -28,10 +28,11 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 data class FeatureSettingsUiState(
+    val flagsReady: Boolean = false,
     val profileName: String? = null,
-    val remindersEnabled: Boolean = UserProfile.DEFAULT_REMINDERS_ENABLED,
-    val waterEnabled: Boolean = UserProfile.DEFAULT_WATER_ENABLED,
-    val gymEnabled: Boolean = UserProfile.DEFAULT_GYM_ENABLED,
+    val remindersEnabled: Boolean = false,
+    val waterEnabled: Boolean = false,
+    val gymEnabled: Boolean = false,
     val waterGoalMl: Int? = null,
     val waterBottleStyleIndex: Int? = null,
     val waterIntakeMl: Int = 0,
@@ -56,6 +57,7 @@ class FeatureSettingsViewModel(
         .map { profile ->
             val today = LocalDate.now(ZoneId.systemDefault()).toEpochDay()
             FeatureSettingsUiState(
+                flagsReady = true,
                 profileName = profile?.displayName?.takeIf { it.isNotBlank() }
                     ?: profile?.nickname?.takeIf { it.isNotBlank() },
                 remindersEnabled = profile?.remindersEnabled ?: UserProfile.DEFAULT_REMINDERS_ENABLED,

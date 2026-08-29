@@ -18,3 +18,10 @@ data class Reminder(
     val note: String? = null,
     val accentColorIndex: Int? = null,
 )
+
+/** End date is inclusive. The reminder expires the day after. */
+fun Reminder.isExpiredOn(date: LocalDate): Boolean =
+    endDate != null && date.isAfter(endDate)
+
+fun List<Reminder>.activeOn(date: LocalDate): List<Reminder> =
+    filterNot { it.isExpiredOn(date) }

@@ -475,5 +475,32 @@ object GymLogic {
         }
         return next
     }
+
+    fun <T> reorderListByMove(items: List<T>, fromIndex: Int, toIndex: Int): List<T> {
+        if (fromIndex == toIndex) return items
+        if (fromIndex !in items.indices || toIndex !in items.indices) return items
+        val mutable = items.toMutableList()
+        val moved = mutable.removeAt(fromIndex)
+        mutable.add(toIndex, moved)
+        return mutable
+    }
+
+    fun reorderListByKey(keys: List<String>, movedKey: String, toIndex: Int): List<String> {
+        val fromIndex = keys.indexOf(movedKey)
+        if (fromIndex < 0) return keys
+        return reorderListByMove(keys, fromIndex, toIndex)
+    }
+
+    fun reorderDaysByKeys(
+        days: List<GymRoutineDay>,
+        orderedKeys: List<String>,
+    ): List<GymRoutineDay>? {
+        if (orderedKeys.size != days.size) return null
+        val byKey = days.associateBy { it.localKey }
+        if (orderedKeys.any { it !in byKey }) return null
+        return orderedKeys.mapIndexed { index, key ->
+            byKey.getValue(key).copy(dayIndex = index)
+        }
+    }
 }
 

@@ -1,6 +1,10 @@
 package com.deepak.flow.app
 
 import android.content.Intent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,6 +28,9 @@ import com.deepak.flow.app.navigation.navigateFromDrawer
 import com.deepak.flow.app.navigation.navigateToActiveWorkout
 import com.deepak.flow.app.theme.FlowTheme
 import com.deepak.flow.core.gym.GymWorkoutType
+import com.deepak.flow.core.model.OnboardingGate
+import com.deepak.flow.core.model.UserProfile
+import com.deepak.flow.core.model.onboardingGate
 import com.deepak.flow.core.update.AppUpdateViewModel
 import com.deepak.flow.core.widget.WidgetLaunch
 import com.deepak.flow.core.widget.widgetDestinationOrNull
@@ -67,6 +74,7 @@ import com.deepak.flow.feature.settings.presentation.AboutScreen
 import com.deepak.flow.feature.settings.presentation.AppUpdatePrompt
 import com.deepak.flow.feature.settings.presentation.SettingsScreen
 import com.deepak.flow.feature.settings.presentation.SettingsViewModel
+import kotlinx.coroutines.flow.map
 import com.deepak.flow.feature.water.presentation.WaterScreen
 
 @Composable
@@ -77,18 +85,37 @@ fun FlowApp(
 ) {
     val app = LocalContext.current.applicationContext as FlowApplication
     val factory = FlowViewModelFactory(app)
-    val onboardingComplete by app.profileRepository.isOnboardingComplete()
-        .collectAsStateWithLifecycle(initialValue = false)
+    val profileLoad by app.profileRepository.observeProfile()
+        .map<UserProfile?, ProfileLoad> { ProfileLoad.Loaded(it) }
+        .collectAsStateWithLifecycle(initialValue = ProfileLoad.Loading)
+    val gate = when (val load = profileLoad) {
+        ProfileLoad.Loading -> onboardingGate(profileLoaded = false, profile = null)
+        is ProfileLoad.Loaded -> onboardingGate(profileLoaded = true, profile = load.profile)
+    }
 
     FlowTheme {
-        if (!onboardingComplete) {
-            val viewModel: OnboardingViewModel = viewModel(factory = factory)
-            OnboardingScreen(
-                viewModel = viewModel,
-                modifier = modifier,
-            )
-        } else {
-            val navController = rememberNavController()
+        when (gate) {
+            OnboardingGate.Loading -> {
+                Box(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                )
+            }
+            OnboardingGate.ShowTutorial -> {
+                val viewModel: OnboardingViewModel = viewModel(factory = factory)
+                OnboardingScreen(
+                    viewModel = viewModel,
+                    modifier = modifier,
+                )
+            }
+            OnboardingGate.Ready -> {
+                val profile = (profileLoad as ProfileLoad.Loaded).profile
+                    ?: return@FlowTheme
+                val remindersEnabled = profile.remindersEnabled
+                val waterEnabled = profile.waterEnabled
+                val gymEnabled = profile.gymEnabled
+                val navController = rememberNavController()
             val updateViewModel: AppUpdateViewModel = viewModel(factory = factory)
             val featureViewModel: FeatureSettingsViewModel = viewModel(factory = factory)
             val featureState by featureViewModel.uiState.collectAsStateWithLifecycle()
@@ -97,11 +124,8 @@ fun FlowApp(
                     navController.navigateFromDrawer(destination)
                 }
             }
-            // v83 behavior: NavHost always starts at Home; widget/notification
-            // extras navigate via LaunchedEffect. Do not gate on featureState here:
-            // cold start uses waterEnabled=false as the StateFlow initial value, which
-            // wrongly sent users to Home and cleared the intent before profile loaded.
-            // Warm start already had real profile data, so it looked fine.
+            // NavHost always starts at Home. Profile is already loaded here, so
+            // feature flags are the stored values, not new-user defaults.
             LaunchedEffect(launchIntent) {
                 val destinationKey = launchIntent?.widgetDestinationOrNull()
                 when (destinationKey) {
@@ -126,24 +150,36 @@ fun FlowApp(
             ) {
                 composable<FlowRoute.Home> {
                     val viewModel: HomeViewModel = viewModel(factory = factory)
+                    val gymHomeFactory = remember { GymHomeViewModelFactory(app) }
+                    val gymHomeViewModel: GymHomeViewModel = viewModel(factory = gymHomeFactory)
                     HomeScreen(
                         viewModel = viewModel,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        gymViewModel = gymHomeViewModel,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
+                        waterGoalMl = featureState.waterGoalMl,
+                        waterIntakeMl = featureState.waterIntakeMl,
+                        waterCustomQuickAddsMl = featureState.waterCustomQuickAddsMl,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
                         onDestinationClick = onDrawerDestination,
+                        onEditReminder = { id ->
+                            navController.navigate(FlowRoute.EditReminder(reminderId = id))
+                        },
+                        onAddWaterMl = featureViewModel::addWaterMl,
+                        onOpenWater = { onDrawerDestination(FlowDrawerDestination.WATER) },
+                        onOpenGymRoutine = { navController.navigate(FlowRoute.GymRoutine) },
                     )
                 }
                 composable<FlowRoute.Reminders> {
                     val viewModel: HomeViewModel = viewModel(factory = factory)
                     RemindersScreen(
                         viewModel = viewModel,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -157,14 +193,14 @@ fun FlowApp(
                 composable<FlowRoute.Water> {
                     WaterScreen(
                         userName = featureState.profileName,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         waterGoalMl = featureState.waterGoalMl,
                         waterBottleStyleIndex = featureState.waterBottleStyleIndex,
                         waterIntakeMl = featureState.waterIntakeMl,
                         canUndoWater = featureState.canUndoWater,
                         waterCustomQuickAddsMl = featureState.waterCustomQuickAddsMl,
-                        remindersEnabled = featureState.remindersEnabled,
+                        remindersEnabled = remindersEnabled,
                         waterRemindersEnabled = featureState.waterRemindersEnabled,
                         waterReminderIntervalMinutes = featureState.waterReminderIntervalMinutes,
                         waterActiveHoursStartMinutes = featureState.waterActiveHoursStartMinutes,
@@ -194,9 +230,9 @@ fun FlowApp(
                     GymChoiceScreen(
                         viewModel = gymHomeViewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -219,9 +255,9 @@ fun FlowApp(
                     GymRoutineScreen(
                         viewModel = gymHomeViewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -240,9 +276,9 @@ fun FlowApp(
                     RoutineCatalogScreen(
                         viewModel = catalogViewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -269,9 +305,9 @@ fun FlowApp(
                     RoutineBuilderScreen(
                         viewModel = builderViewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -288,9 +324,9 @@ fun FlowApp(
                     FreeWorkoutScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -311,9 +347,9 @@ fun FlowApp(
                     FreeWorkoutScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -328,9 +364,9 @@ fun FlowApp(
                     HistoryScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -352,9 +388,9 @@ fun FlowApp(
                     HistoryDayScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -383,9 +419,9 @@ fun FlowApp(
                     HistoryTasksDetailScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -405,9 +441,9 @@ fun FlowApp(
                     HistoryWaterDetailScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -427,9 +463,9 @@ fun FlowApp(
                     HistoryGymDayScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -452,9 +488,9 @@ fun FlowApp(
                     HistoryGymWorkoutScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -486,9 +522,9 @@ fun FlowApp(
                     HistoryGymEditExerciseScreen(
                         viewModel = viewModel,
                         userName = featureState.profileName,
-                        remindersEnabled = featureState.remindersEnabled,
-                        waterEnabled = featureState.waterEnabled,
-                        gymEnabled = featureState.gymEnabled,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
                         onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
                         onWaterEnabledChange = featureViewModel::setWaterEnabled,
                         onGymEnabledChange = featureViewModel::setGymEnabled,
@@ -533,6 +569,12 @@ fun FlowApp(
                     )
                 }
             }
+            }
         }
     }
+}
+
+private sealed interface ProfileLoad {
+    data object Loading : ProfileLoad
+    data class Loaded(val profile: UserProfile?) : ProfileLoad
 }

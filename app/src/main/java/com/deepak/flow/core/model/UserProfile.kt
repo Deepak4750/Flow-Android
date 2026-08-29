@@ -29,9 +29,9 @@ data class UserProfile(
     val activeGymRoutineId: Long? = null,
 ) {
     companion object {
-        const val DEFAULT_REMINDERS_ENABLED = true
+        const val DEFAULT_REMINDERS_ENABLED = false
         const val DEFAULT_WATER_ENABLED = false
-        const val DEFAULT_GYM_ENABLED = true
+        const val DEFAULT_GYM_ENABLED = false
         const val DEFAULT_GYM_WEIGHT_UNIT = "KG"
         const val DEFAULT_GYM_SET_REST_SECONDS = 90
         const val DEFAULT_GYM_EXERCISE_REST_SECONDS = 120
@@ -160,6 +160,9 @@ fun parseCustomWaterMl(raw: String): Int? {
 
 fun filterCustomWaterInput(raw: String): String =
     raw.filter { it.isDigit() }.take(3)
+
+fun waterQuickAddLabel(amountMl: Int): String =
+    if (amountMl >= 1000) "1 L" else "$amountMl ml"
 
 /** Built-in quick adds plus saved custom amounts, sorted by size. */
 val WaterBuiltinQuickAddsMl = listOf(250, 500, 1000)

@@ -458,5 +458,15 @@ class GymLogicTest {
         assertEquals(1, GymLogic.nextDayIndex(0, 3))
         assertEquals(0, GymLogic.nextDayIndex(2, 3))
     }
+
+    @Test
+    fun reorderDays_updatesIndices() {
+        val days = listOf("a", "b", "c", "d")
+        val reordered = days.toMutableList().apply {
+            val moved = removeAt(3)
+            add(1, moved)
+        }
+        assertEquals(listOf("a", "d", "b", "c"), reordered)
+    }
 }
 

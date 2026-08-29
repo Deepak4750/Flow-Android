@@ -13,4 +13,10 @@ class KeepDataStoreTest {
         assertFalse(KeepDataStore.shouldWriteKeepCopy(keepEnabled = false, onboardingCompleted = true))
         assertFalse(KeepDataStore.shouldWriteKeepCopy(keepEnabled = false, onboardingCompleted = false))
     }
+
+    @Test
+    fun restoresBackupOnlyForMatchingAndroidUser() {
+        assertTrue(KeepDataStore.shouldRestoreBackup(metaOwnerUserId = 0, currentUserId = 0))
+        assertFalse(KeepDataStore.shouldRestoreBackup(metaOwnerUserId = 0, currentUserId = 10))
+    }
 }

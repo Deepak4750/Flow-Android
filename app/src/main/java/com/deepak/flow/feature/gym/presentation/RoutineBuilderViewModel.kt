@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
+import com.deepak.flow.core.gym.GymLogic
 import com.deepak.flow.core.gym.GymLimits
 import com.deepak.flow.core.gym.GymRoutine
 import com.deepak.flow.core.gym.GymRoutineDay
@@ -215,23 +216,33 @@ class RoutineBuilderViewModel(
 
     fun moveDay(fromIndex: Int, toIndex: Int) {
         if (fromIndex == toIndex) return
+        val keys = GymLogic.reorderListByMove(
+            _uiState.value.days.map { it.localKey },
+            fromIndex,
+            toIndex,
+        )
+        reorderDaysByKeys(keys)
+    }
+
+    fun reorderDaysByKeys(orderedKeys: List<String>) {
         updateState { state ->
-            if (fromIndex !in state.days.indices || toIndex !in state.days.indices) return@updateState state
-            val days = state.days.toMutableList()
-            val moved = days.removeAt(fromIndex)
-            days.add(toIndex, moved)
-            val reindexed = days.mapIndexed { index, day -> day.copy(dayIndex = index) }
-            state.copy(
-                days = reindexed,
-                message = null,
-            )
+            val reordered = GymLogic.reorderDaysByKeys(state.days, orderedKeys) ?: return@updateState state
+            state.copy(days = reordered, message = null)
         }
+    }
+
+    fun discardAndLeave() {
+        _uiState.update { it.copy(leave = true, message = null, hasUnsavedChanges = false) }
     }
 
     fun addExercise(dayKey: String) {
         updateState { state ->
             val dayIndex = state.dayIndexForKey(dayKey)
             if (dayIndex < 0) return@updateState state
+            val day = state.days[dayIndex]
+            if (!day.isRestDay && day.exercises.any { it.name.trim().isEmpty() }) {
+                return@updateState state.copy(message = "Exercise title is required")
+            }
             val days = state.days.mapIndexed { index, day ->
                 if (index != dayIndex) return@mapIndexed day
                 val exercise = GymRoutineExercise(
@@ -282,14 +293,22 @@ class RoutineBuilderViewModel(
         }
     }
 
-    fun toggleExerciseExpanded(exerciseStableKey: String) {
+    fun toggleExerciseExpanded(dayKey: String, exerciseStableKey: String) {
         updateState { state ->
+            if (state.expandedExerciseStableKey == exerciseStableKey) {
+                val day = state.dayForKey(dayKey)
+                val exercise = day?.exercises?.find { it.stableKey == exerciseStableKey }
+                if (exercise != null && exercise.name.trim().isEmpty()) {
+                    return@updateState state.copy(message = "Exercise title is required")
+                }
+            }
             state.copy(
                 expandedExerciseStableKey = if (state.expandedExerciseStableKey == exerciseStableKey) {
                     null
                 } else {
                     exerciseStableKey
                 },
+                message = null,
             )
         }
     }

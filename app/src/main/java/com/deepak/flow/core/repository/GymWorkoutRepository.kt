@@ -159,6 +159,8 @@ interface GymWorkoutRepository {
 
     suspend fun deleteRoutine(routineId: Long)
 
+    suspend fun isRoutineInActiveWorkout(routineId: Long): Boolean
+
     suspend fun setRoutineStarred(routineId: Long, starred: Boolean)
 
     /**

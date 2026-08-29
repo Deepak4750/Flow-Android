@@ -2,15 +2,15 @@
 
 A private, offline-first companion for Android.
 
-Flow is built around one idea: **make showing up feel good.** It remembers what you decided matters, tells you what happens next, and never scolds you for what you missed.
+Flow helps you follow through on what you decided matters: tasks, water, gym workouts, and quiet daily progress. It is built around one idea: **make showing up feel good.**
 
-There is no account, no cloud sync, and no analytics. Tasks live only on the phone. The network is used only to check for app updates.
+There is no account, no cloud sync, and no in-app analytics. Your data stays on your phone unless you explicitly use the network to check for app updates.
 
-**Current stable release: [1.1.1](https://github.com/Deepak4750/Flow-Releases/releases/latest)**
+**Current stable release: [1.3.3](https://github.com/Deepak4750/Flow-Releases/releases/latest)**
 
-[Download the APK](https://github.com/Deepak4750/Flow-Releases/releases/download/v1.1.1/Flow-1.1.1.apk) · [All releases](https://github.com/Deepak4750/Flow-Releases/releases)
+[Download the APK](https://github.com/Deepak4750/Flow-Releases/releases/download/v1.3.3/Flow-1.3.3.apk) · [All releases](https://github.com/Deepak4750/Flow-Releases/releases) · [Source](https://github.com/Deepak4750/Flow-Android)
 
-Requires Android 11 or later (API 30+). Install over a previous Flow build to keep your tasks.
+Requires Android 11 or later (API 30+). Install over a previous Flow build to keep your data.
 
 ---
 
@@ -18,126 +18,187 @@ Requires Android 11 or later (API 30+). Install over a previous Flow build to ke
 
 ### Home
 
-- A personal greeting that changes through the day - Good morning, Good afternoon, Good evening - and can include your nickname.
-- Today’s follow-through as a quiet count, not a guilt dashboard.
+- Personal greeting through the day, optionally using your nickname.
+- **Next up** for the soonest task.
+- Quiet daily follow-through count, not a guilt dashboard.
 
 ### Tasks
 
-- A calm vertical list: what, when, and status.
-- **Next up** called out so the soonest task is obvious in under two seconds.
-- Mark a task complete for today with the same outlined check used in the rest of the app.
-- Daily progress as a quiet count.
-- Filter by category, including names you created yourself.
-- Enable, disable, edit, or delete a task without leaving the list.
+- Calm vertical list: what, when, and status.
+- Create and edit with progressive disclosure instead of a giant form.
+- Built-in and custom categories.
+- Optional **Why** field (private motivation, not shown in notifications).
+- Scheduling: daily, weekly, monthly, every N days, every N hours.
+- Active hours ("only remind me while I'm awake").
+- Notifications with Complete, Dismiss, and optional Snooze.
+- Home screen **Today** and **Progress** widgets.
 
-### Create and edit
+### H₂O
 
-- Progressive disclosure instead of a giant form: what, when, how often, then optional advanced settings.
-- Title, category, time, and an optional notification note.
-- Built-in categories: Health, Fitness, Study, Work, Personal.
-- **Custom categories** you name yourself. Saved names reappear as chips the next time you create a task, and drop away when the last task with that name is permanently deleted.
-- Optional **Why** - a private reason Flow keeps with the task, never shown in the notification.
-- Optional start date, end date, and **active hours** (“only remind me while I’m awake”).
-- Time defaults to now when you open create, so a new task is ready in seconds.
+- Fast water logging (250 ml, 500 ml, 1 L, custom amounts).
+- Daily goal and progress.
+- Drink reminders with quiet notifications.
+- Widget support for quick logging.
 
-### Scheduling
+### Gym
 
-Five repeat types, shown as ordinary choices rather than internal types:
+- **Routines** with multi-day plans and a routine builder.
+- **Free Workout** for ad-hoc sessions.
+- Active workout UI focused on the current set.
+- Rest timer with up-next preview.
+- Weight and rep tracking with previous performance context.
+- History of completed workouts.
 
-| You pick | What Flow does |
+### History
+
+- Day-by-day view of tasks, water, and gym activity.
+- Read-only look back without turning Home into a dashboard.
+
+### Onboarding
+
+- First-run feature selection (Tasks, H₂O, Gym).
+- Optional name and nickname.
+- Sparse, intentional empty states.
+
+### Settings
+
+- Notification permission and snooze controls.
+- **Keep data** toggle for local persistence across reinstall (see Privacy).
+- In-app update check (stable channel).
+- About screen with version and privacy summary.
+- Preview update channel (hidden; tap version seven times in About).
+
+---
+
+## Privacy / Data
+
+Flow is **offline-first**. You can verify this in the source code.
+
+### What is stored locally
+
+All personal data lives in a Room SQLite database (`flow_database`) in the app's private storage. Tables include:
+
+| Area | Stored locally |
 | --- | --- |
-| Every day | Fires each day at the chosen time |
-| Every week | Fires on the weekdays you select |
-| Every month | Fires on that day of the month (clamped in shorter months) |
-| Every few days | Repeats every N days from the start you choose |
-| Every few hours | Repeats every N hours, still respecting active hours |
+| Tasks | Reminders, schedules, completions, categories |
+| Profile | Name, nickname, feature toggles, preferences |
+| H₂O | Daily intake and water reminder settings |
+| Gym | Routines, workouts, sets, exercise notes |
+| History | Derived from the above tables |
 
-Active hours that cross midnight are supported. A window whose start equals its end means all day.
+Room schema JSON is exported under `app/schemas/` for migration review.
 
-### Notifications
+### Keep Data
 
-- Quiet, high-importance task notifications - a tap on the shoulder, not an alarm-clock shout.
-- Actions: **Complete**, **Dismiss**, and optional **Snooze**.
-- Swiping the shade item brings it back immediately until you Complete, Dismiss, or Snooze.
-- Complete from the notification, Tasks, or the Today widget clears it and it stays cleared.
-- The notification body is only the note you wrote. Placeholders never appear as if you wrote them.
-- Exact alarms reschedule after boot and timezone changes.
+When **Keep data** is enabled in Settings (default on), Flow writes a local copy of the database to:
 
-### Home screen widgets
+`Documents/Flow/flow-keep.db`
 
-- **Today** - a rounded dark tile with today’s tasks. Scroll the list, mark complete with the in-app tick, tap a row to open Flow. The next task’s time is shown in Flow’s accent.
-- **Progress** - today’s follow-through as a 7×7 dot matrix. Swipe to the percentage. Tap anywhere to open Flow.
+plus a small metadata file (`flow-keep.meta`) scoped to your Android user profile. On reinstall, Flow can restore from this copy if the private database is missing.
 
-### Settings and About
+- Nothing is uploaded.
+- Backups are scoped per Android user profile (clones/work profiles do not inherit another profile's backup).
+- Turning Keep data off deletes the public Documents copy.
 
-- Name and optional nickname.
-- Notification permission, with the current state re-read when you return.
-- Snooze on or off, and how long.
-- Count of stored tasks, and delete-all behind a confirmation.
-- Check for update in Settings. When a newer build is ready, Flow offers Install or Later.
-- About: version, tagline, and a plain privacy statement.
-- Preview channel (tap the version seven times on About) so one phone can see builds before they go to everyone else.
+See `KeepDataStore.kt` and `FlowApplication.kt`.
 
-### Privacy
+### Backup / restore
 
-- Offline-first. Tasks never leave the device.
-- No account, no sync, no tracking.
-- Network is used only for the in-app updater.
+Flow does **not** use Android cloud backup for task data in a way that syncs to a server. The user-controlled mechanism is **Keep data** (local file on device).
+
+There is no export-to-cloud feature in the app today.
+
+### Network use
+
+The app makes outbound network requests only for **in-app updates**:
+
+1. Fetch `latest.json` from the public [Flow-Releases](https://github.com/Deepak4750/Flow-Releases) repository.
+2. Download the APK URL named in that manifest when you choose to install an update.
+
+No other routine network calls for tasks, gym, water, or profile data were found in the application source.
+
+### Analytics and tracking
+
+- No Firebase, Crashlytics, Sentry, or third-party analytics SDKs are included in this project.
+- No advertising IDs are collected by Flow.
+- GitHub may log access when you download releases or when the app fetches `latest.json`; that is outside the app binary.
+
+### What you can verify from this repository
+
+- Room entities, DAOs, and migrations (`app/src/main/java/com/deepak/flow/core/database/`)
+- Keep Data read/write logic (`KeepDataStore.kt`)
+- Update manifest URLs (`UpdateChannel.kt`, `AppUpdateRepository.kt`)
+- Notification and scheduling code
+- UI and feature logic for Tasks, H₂O, Gym, and History
+
+### What you cannot verify from this repository alone
+
+- Behavior of GitHub's hosting and release CDN
+- Whether a specific APK on GitHub was built from a given commit (release builds are debug-key signed for sideloading; compare `versionCode` / `versionName` in the installed app)
+- Future infrastructure not present in this repo (e.g. private download analytics)
 
 ---
 
-## Install
+## Download
 
-1. Download [Flow-1.1.1.apk](https://github.com/Deepak4750/Flow-Releases/releases/download/v1.1.1/Flow-1.1.1.apk).
+1. Download [Flow-1.3.3.apk](https://github.com/Deepak4750/Flow-Releases/releases/download/v1.3.3/Flow-1.3.3.apk).
 2. Allow install from that source if Android asks.
-3. Open the APK. Installing over an older Flow keeps tasks in place.
+3. Open the APK. Installing over an older Flow keeps data in place when `versionCode` increases.
 
-After that, open Flow when a newer version is ready and tap **Install** on the update prompt.
+After install, Flow can also offer updates in-app when a newer stable build is published.
 
-Updates are published at [Deepak4750/Flow-Releases](https://github.com/Deepak4750/Flow-Releases). The app reads `latest.json` there and downloads the APK from the matching GitHub Release.
+Stable APKs and OTA manifests are published at [Deepak4750/Flow-Releases](https://github.com/Deepak4750/Flow-Releases). The app reads `latest.json` there and downloads the APK from the matching GitHub Release.
 
 ---
 
-## Building from source
+## Build
 
-Prerequisites: JDK 21, Android SDK platform 37, and `local.properties` with `sdk.dir`.
+Prerequisites: **JDK 21**, **Android SDK platform 37**, and `local.properties` with `sdk.dir`.
 
 ```powershell
 .\gradlew.bat testDebugUnitTest assembleRelease
 ```
 
-The sideloadable release APK is written to `app/build/outputs/apk/release/app-release.apk`.
+The sideloadable release APK is written to:
+
+`app/build/outputs/apk/release/app-release.apk`
 
 | | |
 | --- | --- |
 | `applicationId` | `com.deepak.flow` |
 | `minSdk` | 30 |
 | `targetSdk` / `compileSdk` | 37 |
-| `versionName` | 1.1.1 (`versionCode` 26) |
+| `versionName` | 1.3.3 (`versionCode` 180) |
 | Kotlin / AGP / Gradle | 2.2.10 / 9.3.1 / 9.5.1 |
 
-## Architecture
+Release builds are signed with the debug key so they can be sideloaded without a private keystore in the tree. Do not publish a Play Store build from this configuration.
 
-Single Gradle module (`:app`), MVVM, packages rather than extra Gradle modules. Compose screens collect one `UiState` from an `AndroidViewModel`. Repositories sit on Room. `ReminderRepositoryImpl` keeps persistence and alarms in step. `FlowApplication` is the manual DI container - no Hilt or Koin.
+### Architecture
 
-`SchedulingEngine` is pure Kotlin: given a task, an instant, and a zone, it returns the next occurrence. Flow keeps one exact alarm per task and reschedules after each fire, after boot, and after a timezone change.
+Single Gradle module (`:app`), MVVM, Compose UI, Room persistence, manual DI in `FlowApplication` (no Hilt/Koin). `SchedulingEngine` is pure Kotlin for next-fire time calculation.
 
-## Design
-
-- Dark only. No light theme, no theme toggle, no dynamic colour.
-- Hierarchy from type and space, not from extra cards.
-- A restrained cool accent marks what happens next - not rainbow category chrome.
-- Custom components in `FlowDesignSystem.kt` rather than stock Material controls everywhere.
-- Copy never shames. Coming back counts.
-
-## Testing
+### Testing
 
 ```powershell
 .\gradlew.bat testDebugUnitTest
 ```
 
-Local JVM tests cover scheduling, active hours, widgets, notification actions, custom categories, and update manifests. There are no instrumented tests yet.
+JVM unit tests cover scheduling, widgets, notifications, gym logic, Keep Data, and update manifests.
+
+---
 
 ## License
 
-No license has been chosen for this project yet.
+**No license has been chosen for this project yet.** You may inspect the source, but redistribution terms are not defined until a `LICENSE` file is added.
+
+---
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for how to report vulnerabilities.

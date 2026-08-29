@@ -20,3 +20,12 @@ signing.properties
 # Kotlin / IDE
 .kotlin/
 *.log
+
+# Local Cursor / agent workspace (may contain DB backups, screenshots, diagnostics)
+.cursor/
+
+# Design reference assets not part of the app
+mobile-app-ui-design/
+
+# Local-only diagnostic instrumentation (not for public releases)
+app/src/main/java/com/deepak/flow/diagnostic/

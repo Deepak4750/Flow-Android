@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,26 +30,31 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,7 +72,15 @@ import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.components.FlowUndoBanner
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowShell
+import com.deepak.flow.app.theme.FlowMotion
 import com.deepak.flow.app.theme.FlowSpacing
+import com.deepak.flow.app.theme.FlowSurfaceRaised
+import com.deepak.flow.app.theme.FlowBorder
+import com.deepak.flow.app.theme.FlowSizes
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.deepak.flow.app.theme.FlowTextDisabled
 import com.deepak.flow.app.theme.FlowTextPrimary
 import com.deepak.flow.app.theme.FlowTextSecondary
@@ -78,8 +92,6 @@ import com.deepak.flow.core.gym.GymRoutineDay
 import com.deepak.flow.core.gym.GymRoutineExercise
 import com.deepak.flow.core.gym.TrackingField
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 private val DefaultDayHeightDp = 72.dp
 
@@ -101,7 +113,7 @@ fun RoutineBuilderScreen(
     var showLeavePrompt by remember { mutableStateOf(false) }
 
     val requestLeave: () -> Unit = {
-        if (uiState.hasPendingEdits) {
+        if (!uiState.isEditMode || uiState.hasPendingEdits) {
             showLeavePrompt = true
         } else {
             onLeave()
@@ -116,24 +128,43 @@ fun RoutineBuilderScreen(
         dismissLeavePrompt()
     }
 
-    BackHandler(enabled = uiState.hasPendingEdits && !showLeavePrompt) {
+    BackHandler(enabled = uiState.hasPendingEdits && !showLeavePrompt && uiState.isEditMode) {
+        showLeavePrompt = true
+    }
+
+    BackHandler(enabled = !uiState.isEditMode && !showLeavePrompt) {
         showLeavePrompt = true
     }
 
     if (showLeavePrompt) {
-        FlowDialog(
-            title = "Save changes?",
-            message = "You have unsaved changes to this routine.",
-            confirmText = "Save changes",
-            dismissText = "Cancel",
-            confirmEnabled = uiState.canSave,
-            onConfirm = {
-                dismissLeavePrompt()
-                viewModel.save()
-            },
-            onDismiss = dismissLeavePrompt,
-            onDismissRequest = dismissLeavePrompt,
-        )
+        if (uiState.isEditMode) {
+            RoutineEditLeaveDialog(
+                canSave = uiState.canSave,
+                onSave = {
+                    dismissLeavePrompt()
+                    viewModel.save()
+                },
+                onCancel = dismissLeavePrompt,
+                onDiscard = {
+                    dismissLeavePrompt()
+                    viewModel.discardAndLeave()
+                },
+            )
+        } else {
+            FlowDialog(
+                title = "Discard routine?",
+                message = "Leave without saving this new routine.",
+                confirmText = "Discard",
+                dismissText = "Cancel",
+                destructive = true,
+                onConfirm = {
+                    dismissLeavePrompt()
+                    viewModel.discardAndLeave()
+                },
+                onDismiss = dismissLeavePrompt,
+                onDismissRequest = dismissLeavePrompt,
+            )
+        }
     }
 
     LaunchedEffect(uiState.leave) {
@@ -174,24 +205,70 @@ fun RoutineBuilderScreen(
         }
 
         var draggingDayKey by remember { mutableStateOf<String?>(null) }
+        var activeDragDayKey by remember { mutableStateOf<String?>(null) }
         var dragOffsetY by remember { mutableFloatStateOf(0f) }
+        var lastCommittedOrderKeys by remember { mutableStateOf<List<String>>(emptyList()) }
+        val dayOrderKeys = remember { mutableStateListOf<String>() }
         val dayHeights = remember { mutableStateMapOf<String, Float>() }
         var swipeResetKey by remember { mutableIntStateOf(0) }
         val density = LocalDensity.current
         val defaultHeightPx = with(density) { DefaultDayHeightDp.toPx() }
+        val dayGapPx = with(density) { (FlowSpacing.xl * 2 + 1.dp).toPx() }
         val scrollState = rememberScrollState()
 
-        val dragFromIndex = draggingDayKey?.let { key ->
-            uiState.days.indexOfFirst { it.localKey == key }.takeIf { it >= 0 }
+        LaunchedEffect(uiState.days, draggingDayKey, lastCommittedOrderKeys) {
+            if (draggingDayKey != null) return@LaunchedEffect
+            val vmKeys = uiState.days.map { it.localKey }
+            val localKeys = dayOrderKeys.toList()
+            when {
+                localKeys.isEmpty() -> {
+                    dayOrderKeys.addAll(vmKeys)
+                    lastCommittedOrderKeys = vmKeys
+                }
+                localKeys.toSet() != vmKeys.toSet() -> {
+                    dayOrderKeys.clear()
+                    dayOrderKeys.addAll(vmKeys)
+                    lastCommittedOrderKeys = vmKeys
+                }
+                localKeys != vmKeys && vmKeys == lastCommittedOrderKeys -> {
+                    dayOrderKeys.clear()
+                    dayOrderKeys.addAll(vmKeys)
+                }
+            }
         }
-        val dragTargetIndex = dragFromIndex?.let { from ->
-            computeTargetDayIndex(
-                fromIndex = from,
-                offsetY = dragOffsetY,
-                days = uiState.days,
-                heights = dayHeights,
-                defaultHeightPx = defaultHeightPx,
-            )
+
+        val daysByKey = remember(uiState.days) { uiState.days.associateBy { it.localKey } }
+        val orderedDays = dayOrderKeys.mapNotNull { daysByKey[it] }
+        val dragFromIndex = activeDragDayKey?.let { key -> dayOrderKeys.indexOf(key) } ?: -1
+
+        fun applyLiveDayReorder(movedKey: String, to: Int, days: List<GymRoutineDay>) {
+            val from = dayOrderKeys.indexOf(movedKey)
+            if (from < 0 || from == to) return
+            val direction = if (to > from) 1 else -1
+            var crossedPx = 0f
+            if (direction > 0) {
+                for (index in from until to) {
+                    crossedPx += dayHeights[days[index].localKey] ?: defaultHeightPx
+                    if (index < days.lastIndex) crossedPx += dayGapPx
+                }
+            } else {
+                for (index in (to until from).reversed()) {
+                    crossedPx += dayHeights[days[index].localKey] ?: defaultHeightPx
+                    if (index > 0) crossedPx += dayGapPx
+                }
+            }
+            dayOrderKeys.removeAt(from)
+            dayOrderKeys.add(to, movedKey)
+            val committed = dayOrderKeys.toList()
+            lastCommittedOrderKeys = committed
+            viewModel.reorderDaysByKeys(committed)
+            dragOffsetY -= direction * crossedPx
+        }
+
+        fun clearDayDragState() {
+            draggingDayKey = null
+            activeDragDayKey = null
+            dragOffsetY = 0f
         }
 
         Column(
@@ -208,24 +285,29 @@ fun RoutineBuilderScreen(
             )
             Spacer(modifier = Modifier.height(FlowSpacing.xl))
 
-            uiState.days.forEachIndexed { dayIndex, day ->
-                val dayKey = day.localKey
+            dayOrderKeys.forEachIndexed { dayIndex, dayKey ->
+                val day = daysByKey[dayKey] ?: return@forEachIndexed
+                key(dayKey) {
                 val expanded = uiState.expandedDayKey == dayKey
-                val canRemoveDay = uiState.days.size > GymLimits.DAY_COUNT_MIN
-                val isDragging = draggingDayKey == dayKey
-                val dragHeight = dayHeights[dayKey] ?: defaultHeightPx
-                val displacementY = dayDisplacementY(
+                val canRemoveDay = dayOrderKeys.size > GymLimits.DAY_COUNT_MIN
+                val isDragging = activeDragDayKey == dayKey
+                val displacementY = dayDisplacementYSmooth(
                     index = dayIndex,
-                    dragFromIndex = dragFromIndex,
+                    fromIndex = dragFromIndex,
                     dragOffsetY = dragOffsetY,
-                    targetIndex = dragTargetIndex,
-                    draggedHeightPx = dragHeight,
+                    orderedDays = orderedDays,
+                    heights = dayHeights,
+                    defaultHeightPx = defaultHeightPx,
+                    gapPx = dayGapPx,
                 )
 
                 Column(
                     modifier = Modifier
                         .zIndex(if (isDragging) 1f else 0f)
-                        .offset { IntOffset(0, displacementY.roundToInt()) }
+                        .routineDayDragVisual(
+                            displacementY = displacementY,
+                            isDragging = isDragging,
+                        )
                         .onSizeChanged { dayHeights[dayKey] = it.height.toFloat() },
                 ) {
                     FlowSwipeDeleteRow(
@@ -239,44 +321,42 @@ fun RoutineBuilderScreen(
                         RoutineDayBlock(
                             day = day,
                             dayIndex = dayIndex,
+                            dayKey = dayKey,
                             expanded = expanded,
                             isDragging = isDragging,
-                            canMove = uiState.days.size > 1,
+                            canMove = dayOrderKeys.size > 1,
                             expandedExerciseStableKey = uiState.expandedExerciseStableKey,
                             onDayNameChange = { viewModel.onDayNameChange(dayKey, it) },
                             onToggleExpanded = { viewModel.toggleDayExpanded(dayKey) },
-                            onDragStart = {
+                            onDayDragStart = {
+                                activeDragDayKey = dayKey
                                 draggingDayKey = dayKey
                                 dragOffsetY = 0f
                             },
-                            onDrag = { delta -> dragOffsetY += delta },
-                            onDragEnd = {
-                                val from = dragFromIndex
-                                if (from != null) {
+                            onDayDrag = { delta ->
+                                if (activeDragDayKey != dayKey) return@RoutineDayBlock
+                                dragOffsetY += delta
+                                val from = dayOrderKeys.indexOf(dayKey)
+                                if (from >= 0) {
+                                    val currentOrderedDays = dayOrderKeys.mapNotNull { daysByKey[it] }
                                     val to = computeTargetDayIndex(
                                         fromIndex = from,
                                         offsetY = dragOffsetY,
-                                        days = uiState.days,
+                                        days = currentOrderedDays,
                                         heights = dayHeights,
                                         defaultHeightPx = defaultHeightPx,
+                                        gapPx = dayGapPx,
                                     )
-                                    draggingDayKey = null
-                                    dragOffsetY = 0f
                                     if (to != from) {
-                                        viewModel.moveDay(from, to)
+                                        applyLiveDayReorder(dayKey, to, currentOrderedDays)
                                     }
-                                } else {
-                                    draggingDayKey = null
-                                    dragOffsetY = 0f
                                 }
                             },
-                            onDragCancel = {
-                                draggingDayKey = null
-                                dragOffsetY = 0f
-                            },
+                            onDayDragEnd = ::clearDayDragState,
+                            onDayDragCancel = ::clearDayDragState,
                             onAddExercise = { viewModel.addExercise(dayKey) },
                             onToggleExercise = { stableKey ->
-                                viewModel.toggleExerciseExpanded(stableKey)
+                                viewModel.toggleExerciseExpanded(dayKey, stableKey)
                             },
                             onExerciseNameChange = { stableKey, value ->
                                 viewModel.onExerciseNameChange(dayKey, stableKey, value)
@@ -295,11 +375,12 @@ fun RoutineBuilderScreen(
                             },
                         )
                     }
-                    if (dayIndex < uiState.days.lastIndex) {
+                    if (dayIndex < dayOrderKeys.lastIndex) {
                         Spacer(modifier = Modifier.height(FlowSpacing.xl))
                         FlowHairlineDivider()
                         Spacer(modifier = Modifier.height(FlowSpacing.xl))
                     }
+                }
                 }
             }
 
@@ -349,13 +430,14 @@ private fun computeTargetDayIndex(
     days: List<GymRoutineDay>,
     heights: Map<String, Float>,
     defaultHeightPx: Float,
+    gapPx: Float,
 ): Int {
     if (offsetY == 0f || days.isEmpty()) return fromIndex
     var index = fromIndex
     if (offsetY > 0f) {
         var remaining = offsetY
         while (index < days.lastIndex) {
-            val step = heights[days[index].localKey] ?: defaultHeightPx
+            val step = (heights[days[index].localKey] ?: defaultHeightPx) + gapPx
             if (remaining < step / 2f) break
             remaining -= step
             index++
@@ -363,7 +445,7 @@ private fun computeTargetDayIndex(
     } else {
         var remaining = -offsetY
         while (index > 0) {
-            val step = heights[days[index - 1].localKey] ?: defaultHeightPx
+            val step = (heights[days[index - 1].localKey] ?: defaultHeightPx) + gapPx
             if (remaining < step / 2f) break
             remaining -= step
             index--
@@ -372,20 +454,70 @@ private fun computeTargetDayIndex(
     return index.coerceIn(0, days.lastIndex)
 }
 
-private fun dayDisplacementY(
+private fun daySlotHeightPx(
+    orderedDays: List<GymRoutineDay>,
     index: Int,
-    dragFromIndex: Int?,
-    dragOffsetY: Float,
-    targetIndex: Int?,
-    draggedHeightPx: Float,
+    heights: Map<String, Float>,
+    defaultHeightPx: Float,
+    gapPx: Float,
 ): Float {
-    val from = dragFromIndex ?: return 0f
-    val target = targetIndex ?: from
-    return when {
-        index == from -> dragOffsetY
-        from < target && index in (from + 1)..target -> -draggedHeightPx
-        from > target && index in target until from -> draggedHeightPx
-        else -> 0f
+    val key = orderedDays.getOrNull(index)?.localKey ?: return defaultHeightPx + gapPx
+    return (heights[key] ?: defaultHeightPx) + gapPx
+}
+
+internal fun dayDisplacementYSmooth(
+    index: Int,
+    fromIndex: Int,
+    dragOffsetY: Float,
+    orderedDays: List<GymRoutineDay>,
+    heights: Map<String, Float>,
+    defaultHeightPx: Float,
+    gapPx: Float,
+): Float {
+    if (fromIndex < 0 || orderedDays.isEmpty()) return 0f
+    if (index == fromIndex) return dragOffsetY
+
+    if (dragOffsetY > 0f && index > fromIndex) {
+        var threshold = 0f
+        for (slotIndex in fromIndex until index) {
+            threshold += daySlotHeightPx(orderedDays, slotIndex, heights, defaultHeightPx, gapPx)
+        }
+        val slot = daySlotHeightPx(orderedDays, index, heights, defaultHeightPx, gapPx)
+        val overlap = (dragOffsetY - threshold).coerceIn(0f, slot)
+        return -overlap
+    }
+
+    if (dragOffsetY < 0f && index < fromIndex) {
+        var threshold = 0f
+        for (slotIndex in index + 1..fromIndex) {
+            threshold += daySlotHeightPx(orderedDays, slotIndex, heights, defaultHeightPx, gapPx)
+        }
+        val slot = daySlotHeightPx(orderedDays, index, heights, defaultHeightPx, gapPx)
+        val overlap = (-dragOffsetY - threshold).coerceIn(0f, slot)
+        return overlap
+    }
+
+    return 0f
+}
+
+@Composable
+private fun Modifier.routineDayDragVisual(
+    displacementY: Float,
+    isDragging: Boolean,
+): Modifier {
+    val liftScale by animateFloatAsState(
+        targetValue = if (isDragging) 1.008f else 1f,
+        animationSpec = tween(FlowMotion.FAST),
+        label = "routineDayDragLift",
+    )
+    val density = LocalDensity.current
+    val shadowPx = with(density) { if (isDragging) 3.dp.toPx() else 0f }
+    return graphicsLayer {
+        translationY = displacementY
+        scaleX = liftScale
+        scaleY = liftScale
+        shadowElevation = shadowPx
+        clip = false
     }
 }
 
@@ -393,16 +525,17 @@ private fun dayDisplacementY(
 private fun RoutineDayBlock(
     day: GymRoutineDay,
     dayIndex: Int,
+    dayKey: String,
     expanded: Boolean,
     isDragging: Boolean,
     canMove: Boolean,
     expandedExerciseStableKey: String?,
     onDayNameChange: (String) -> Unit,
     onToggleExpanded: () -> Unit,
-    onDragStart: () -> Unit,
-    onDrag: (Float) -> Unit,
-    onDragEnd: () -> Unit,
-    onDragCancel: () -> Unit,
+    onDayDragStart: () -> Unit,
+    onDayDrag: (Float) -> Unit,
+    onDayDragEnd: () -> Unit,
+    onDayDragCancel: () -> Unit,
     onAddExercise: () -> Unit,
     onToggleExercise: (String) -> Unit,
     onExerciseNameChange: (String, String) -> Unit,
@@ -416,12 +549,13 @@ private fun RoutineDayBlock(
         verticalAlignment = Alignment.Top,
     ) {
         DayDragHandle(
+            dayKey = dayKey,
             enabled = canMove,
             isDragging = isDragging,
-            onDragStart = onDragStart,
-            onDrag = onDrag,
-            onDragEnd = onDragEnd,
-            onDragCancel = onDragCancel,
+            onDragStart = onDayDragStart,
+            onDrag = onDayDrag,
+            onDragEnd = onDayDragEnd,
+            onDragCancel = onDayDragCancel,
         )
         Column(modifier = Modifier.weight(1f)) {
             Row(
@@ -480,6 +614,7 @@ private fun RoutineDayBlock(
 
 @Composable
 private fun DayDragHandle(
+    dayKey: String,
     enabled: Boolean,
     isDragging: Boolean,
     onDragStart: () -> Unit,
@@ -487,6 +622,11 @@ private fun DayDragHandle(
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
 ) {
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+    val currentOnDragCancel by rememberUpdatedState(onDragCancel)
+
     Icon(
         imageVector = Icons.Default.DragHandle,
         contentDescription = "Drag to reorder day",
@@ -500,12 +640,12 @@ private fun DayDragHandle(
             .size(24.dp)
             .then(
                 if (enabled) {
-                    Modifier.pointerInput(Unit) {
+                    Modifier.pointerInput(dayKey) {
                         detectVerticalDragGestures(
-                            onDragStart = { onDragStart() },
-                            onDragEnd = { onDragEnd() },
-                            onDragCancel = { onDragCancel() },
-                            onVerticalDrag = { _, dragAmount -> onDrag(dragAmount) },
+                            onDragStart = { currentOnDragStart() },
+                            onDragEnd = { currentOnDragEnd() },
+                            onDragCancel = { currentOnDragCancel() },
+                            onVerticalDrag = { _, dragAmount -> currentOnDrag(dragAmount) },
                         )
                     }
                 } else {
@@ -692,5 +832,53 @@ private fun SteppedCountRow(
             color = FlowTextPrimary,
         )
         FlowTextAction(text = "+", onClick = onPlus, enabled = plusEnabled)
+    }
+}
+
+@Composable
+private fun RoutineEditLeaveDialog(
+    canSave: Boolean,
+    onSave: () -> Unit,
+    onCancel: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    Dialog(onDismissRequest = onCancel) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.large)
+                .background(FlowSurfaceRaised)
+                .border(FlowSizes.hairline, FlowBorder, MaterialTheme.shapes.large)
+                .padding(FlowSpacing.lg),
+        ) {
+            Text(
+                text = "Save changes?",
+                style = MaterialTheme.typography.titleLarge,
+                color = FlowTextPrimary,
+                modifier = Modifier.semantics { heading() },
+            )
+            Spacer(modifier = Modifier.height(FlowSpacing.xs))
+            Text(
+                text = "You have unsaved changes to this routine.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = FlowTextSecondary,
+            )
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FlowTextAction(text = "Cancel", onClick = onCancel)
+                Spacer(modifier = Modifier.width(FlowSpacing.lg))
+                FlowTextAction(text = "Discard changes", onClick = onDiscard, destructive = true)
+                Spacer(modifier = Modifier.width(FlowSpacing.lg))
+                FlowTextAction(
+                    text = "Save changes",
+                    onClick = onSave,
+                    enabled = canSave,
+                )
+            }
+        }
     }
 }

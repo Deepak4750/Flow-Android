@@ -7,6 +7,7 @@ import com.deepak.flow.core.database.WaterDayEntity
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.model.WaterReminderSettings
+import com.deepak.flow.core.model.preservedOnboardingCompleted
 import com.deepak.flow.core.model.parseWaterBottleStyleIndex
 import com.deepak.flow.core.model.WaterIntakeWrite
 import com.deepak.flow.core.model.encodeWaterAddLog
@@ -50,7 +51,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = displayName?.trim()?.takeIf { it.isNotEmpty() },
                 nickname = nickname?.trim()?.takeIf { it.isNotEmpty() },
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
             ),
         )
     }
@@ -61,7 +62,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 snoozeEnabled = enabled,
             ),
         )
@@ -73,7 +74,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 snoozeIntervalMinutes = SnoozeSettings.coerceIntervalMinutes(minutes),
             ),
         )
@@ -85,7 +86,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 remindersEnabled = enabled,
             ),
         )
@@ -97,7 +98,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterEnabled = enabled,
             ),
         )
@@ -109,7 +110,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 gymEnabled = enabled,
             ),
         )
@@ -125,7 +126,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 gymWeightUnit = normalized,
             ),
         )
@@ -137,7 +138,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 gymSetRestSeconds = GymLimits.clampSetRestSeconds(seconds),
             ),
         )
@@ -149,7 +150,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 gymExerciseRestSeconds = GymLimits.clampExerciseRestSeconds(seconds),
             ),
         )
@@ -161,7 +162,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterGoalMl = millilitres,
             ),
         )
@@ -174,7 +175,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterBottleStyleIndex = parsed,
             ),
         )
@@ -232,7 +233,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterIntakeMl = coercedMl,
                 waterIntakeEpochDay = epochDay,
                 waterAddLog = encodedLog,
@@ -246,7 +247,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterCustomQuickAddsMl = encodeWaterCustomQuickAdds(amounts),
             ),
         )
@@ -258,7 +259,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterRemindersEnabled = enabled,
             ),
         )
@@ -270,7 +271,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterReminderIntervalMinutes = WaterReminderSettings.coerceIntervalMinutes(minutes),
             ),
         )
@@ -282,7 +283,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterActiveHoursEnabled = enabled,
             ),
         )
@@ -294,7 +295,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterActiveHoursStartMinutes = WaterReminderSettings.coerceMinutesOfDay(minutesOfDay),
             ),
         )
@@ -306,7 +307,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 waterActiveHoursEndMinutes = WaterReminderSettings.coerceMinutesOfDay(minutesOfDay),
             ),
         )
@@ -318,7 +319,7 @@ class ProfileRepositoryImpl(
             existing.toUpsertEntity(
                 displayName = existing?.displayName,
                 nickname = existing?.nickname,
-                onboardingCompleted = existing?.onboardingCompleted ?: true,
+                onboardingCompleted = preservedOnboardingCompleted(existing?.onboardingCompleted),
                 keepDataOnUninstall = enabled,
             ),
         )

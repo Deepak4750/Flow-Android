@@ -264,4 +264,23 @@ class SchedulingEngineTest {
         assertTrue(engine.isScheduledOnDate(weekly, monday, zone))
         assertFalse(engine.isScheduledOnDate(weekly, tuesday, zone))
     }
+
+    @Test
+    fun expiredReminderIsNotNextUp() {
+        val afterEnd = instant(LocalDate.of(2026, 3, 11), LocalTime.of(8, 0))
+        assertNull(
+            engine.calculateNextOccurrence(
+                reminder(endDate = LocalDate.of(2026, 3, 10)),
+                afterEnd,
+                zone,
+            ),
+        )
+    }
+
+    @Test
+    fun expiredReminderStillCountsOnPastHistoryDays() {
+        val reminder = reminder(endDate = LocalDate.of(2026, 3, 10))
+        assertTrue(engine.isScheduledOnDate(reminder, LocalDate.of(2026, 3, 10), zone))
+        assertFalse(engine.isScheduledOnDate(reminder, LocalDate.of(2026, 3, 11), zone))
+    }
 }

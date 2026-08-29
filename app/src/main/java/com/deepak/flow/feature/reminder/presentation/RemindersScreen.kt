@@ -63,6 +63,8 @@ import com.deepak.flow.core.model.Schedule
 import com.deepak.flow.core.model.categoryLabel
 import com.deepak.flow.core.model.savedCustomCategories
 import com.deepak.flow.core.scheduling.SchedulingEngine
+import com.deepak.flow.feature.home.presentation.HomeNextUpSection
+import com.deepak.flow.feature.home.presentation.HomeTodayProgressSection
 import com.deepak.flow.feature.home.presentation.HomeUiState
 import com.deepak.flow.feature.home.presentation.HomeViewModel
 import java.time.Instant
@@ -183,14 +185,14 @@ private fun ColumnScope.RemindersContent(
         )
     } else {
     if (uiState.dailyProgress.hasTasksToday) {
-        DailyProgressSection(progress = uiState.dailyProgress.ratio)
+        HomeTodayProgressSection(progress = uiState.dailyProgress)
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
     }
 
     val next = uiState.nextReminder
     val nextInstant = uiState.nextReminderInstant
     if (next != null && nextInstant != null) {
-        NextUpSection(
+        HomeNextUpSection(
             reminder = next,
             instant = nextInstant,
             timeFormatter = timeFormatter,
@@ -227,15 +229,6 @@ private fun ColumnScope.RemindersContent(
             modifier = Modifier.weight(1f),
         )
     }
-    }
-}
-
-@Composable
-private fun DailyProgressSection(progress: Float) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        FlowScreenHeading("Today")
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        FlowDotMatrixProgress(progress = progress)
     }
 }
 
@@ -279,44 +272,6 @@ private fun CategoryFilterRow(
                 ),
             )
         }
-    }
-}
-
-@Composable
-private fun NextUpSection(
-    reminder: Reminder,
-    instant: Instant,
-    timeFormatter: DateTimeFormatter,
-    zoneId: ZoneId,
-    onClick: () -> Unit,
-) {
-    val zoned = instant.atZone(zoneId)
-    val dayLabel = formatWhenLabel(zoned.toLocalDate(), zoneId)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            FlowAccentDot(color = FlowAccent)
-            Spacer(modifier = Modifier.width(FlowSpacing.xs))
-            FlowScreenHeading("Next up")
-        }
-        Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        Text(
-            text = reminder.title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = FlowTextPrimary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-        Text(
-            text = "$dayLabel · ${zoned.toLocalTime().format(timeFormatter)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = FlowTextSecondary,
-        )
     }
 }
 
@@ -519,15 +474,6 @@ private fun reminderTimeLabel(reminder: Reminder, formatter: DateTimeFormatter):
         is Schedule.EveryXHours -> if (times.isBlank()) "" else "From $times"
         is Schedule.EveryXDays -> if (times.isBlank()) "" else "At $times"
         else -> times
-    }
-}
-
-private fun formatWhenLabel(date: LocalDate, zoneId: ZoneId): String {
-    val today = LocalDate.now(zoneId)
-    return when {
-        date.isEqual(today) -> "Today"
-        date.isEqual(today.plusDays(1)) -> "Tomorrow"
-        else -> date.format(DateTimeFormatter.ofPattern("EEE, d MMM"))
     }
 }
 

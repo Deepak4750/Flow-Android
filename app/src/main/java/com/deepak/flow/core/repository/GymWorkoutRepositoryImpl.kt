@@ -652,6 +652,18 @@ class GymWorkoutRepositoryImpl(
 
     override suspend fun deleteRoutine(routineId: Long) {
         routineDao.deleteRoutineCascade(routineId)
+        val profile = profileDao.getProfile()
+        if (profile?.activeGymRoutineId == routineId) {
+            profileDao.upsert(profile.copy(activeGymRoutineId = null))
+        }
+    }
+
+    override suspend fun isRoutineInActiveWorkout(routineId: Long): Boolean {
+        val active = dao.getLatestByTypeAndStatus(
+            GymWorkoutType.ROUTINE.name,
+            GymWorkoutStatus.ACTIVE.name,
+        ) ?: return false
+        return active.routineId == routineId
     }
 
     override suspend fun setRoutineStarred(routineId: Long, starred: Boolean) {

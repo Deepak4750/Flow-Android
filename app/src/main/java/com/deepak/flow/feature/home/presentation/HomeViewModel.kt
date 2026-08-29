@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.model.DailyProgress
 import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.model.activeOn
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.repository.ProfileRepository
 import com.deepak.flow.core.repository.ReminderRepository
@@ -67,7 +68,8 @@ class HomeViewModel(
         }
         val now = Instant.now()
         val today = LocalDate.now(zoneId)
-        val enabled = reminders.filter { it.enabled }
+        val activeReminders = reminders.activeOn(today)
+        val enabled = activeReminders.filter { it.enabled }
         val nextPair = enabled
             .mapNotNull { reminder ->
                 schedulingEngine.calculateNextOccurrence(reminder, now, zoneId)?.let { instant ->
@@ -80,7 +82,7 @@ class HomeViewModel(
         val completedCount = scheduledToday.count { it.id in completedToday }
 
         HomeUiState(
-            reminders = reminders,
+            reminders = activeReminders,
             greeting = greetingForTime(LocalTime.now(), nickname),
             userLabel = userLabel,
             profileName = profile?.displayName?.takeIf { it.isNotBlank() } ?: nickname,

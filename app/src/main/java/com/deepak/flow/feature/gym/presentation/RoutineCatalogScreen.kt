@@ -1,7 +1,7 @@
 package com.deepak.flow.feature.gym.presentation
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,22 +18,29 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepak.flow.app.components.FlowButton
+import com.deepak.flow.app.components.FlowDialog
 import com.deepak.flow.app.components.FlowHairlineDivider
 import com.deepak.flow.app.components.FlowMetaText
 import com.deepak.flow.app.components.FlowScreenTitle
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSupportingText
+import com.deepak.flow.app.components.FlowSwipeDeleteRow
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowShell
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.app.theme.FlowTextPrimary
 import com.deepak.flow.core.gym.GymLogic
+import kotlinx.coroutines.delay
 
 @Composable
 fun RoutineCatalogScreen(
@@ -52,6 +59,32 @@ fun RoutineCatalogScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var swipeResetKey by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(uiState.confirmDeleteRoutineId) {
+        if (uiState.confirmDeleteRoutineId == null) {
+            swipeResetKey++
+        }
+    }
+
+    LaunchedEffect(uiState.deleteBlockedMessage) {
+        if (uiState.deleteBlockedMessage != null) {
+            delay(2_500)
+            viewModel.clearDeleteBlockedMessage()
+        }
+    }
+
+    if (uiState.confirmDeleteRoutineId != null && uiState.confirmDeleteRoutineName != null) {
+        FlowDialog(
+            title = "Delete routine?",
+            message = "Delete ${uiState.confirmDeleteRoutineName}? This will remove the routine from your routine list.",
+            confirmText = "Delete",
+            dismissText = "Cancel",
+            destructive = true,
+            onConfirm = viewModel::confirmDeleteRoutine,
+            onDismiss = viewModel::dismissDeleteRoutine,
+        )
+    }
 
     FlowShell(
         selected = FlowDrawerDestination.GYM,
@@ -80,8 +113,10 @@ fun RoutineCatalogScreen(
                 uiState.starred.forEach { item ->
                     RoutineCatalogRow(
                         item = item,
+                        swipeResetKey = swipeResetKey,
                         onOpen = { onOpenRoutine(item.id) },
                         onToggleStar = { viewModel.toggleStar(item.id) },
+                        onDelete = { viewModel.requestDeleteRoutine(item.id) },
                     )
                     Spacer(modifier = Modifier.height(FlowSpacing.md))
                 }
@@ -96,8 +131,10 @@ fun RoutineCatalogScreen(
                 uiState.others.forEach { item ->
                     RoutineCatalogRow(
                         item = item,
+                        swipeResetKey = swipeResetKey,
                         onOpen = { onOpenRoutine(item.id) },
                         onToggleStar = { viewModel.toggleStar(item.id) },
+                        onDelete = { viewModel.requestDeleteRoutine(item.id) },
                     )
                     Spacer(modifier = Modifier.height(FlowSpacing.md))
                 }
@@ -107,6 +144,11 @@ fun RoutineCatalogScreen(
                 Spacer(modifier = Modifier.height(FlowSpacing.xxl))
                 FlowSupportingText("No routines yet.")
                 Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            }
+
+            uiState.deleteBlockedMessage?.let { message ->
+                Spacer(modifier = Modifier.height(FlowSpacing.md))
+                FlowSupportingText(message)
             }
         }
 
@@ -125,31 +167,38 @@ fun RoutineCatalogScreen(
 @Composable
 private fun RoutineCatalogRow(
     item: RoutineCatalogItem,
+    swipeResetKey: Int,
     onOpen: () -> Unit,
     onToggleStar: () -> Unit,
+    onDelete: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onOpen)
-            .padding(vertical = FlowSpacing.xs),
-        verticalAlignment = Alignment.CenterVertically,
+    FlowSwipeDeleteRow(
+        modifier = Modifier.fillMaxWidth(),
+        resetKey = swipeResetKey,
+        onDelete = onDelete,
+        onContentClick = onOpen,
+        contentPadding = PaddingValues(vertical = FlowSpacing.xs),
     ) {
-        IconButton(onClick = onToggleStar) {
-            Icon(
-                imageVector = if (item.starred) Icons.Filled.Star else Icons.Outlined.StarOutline,
-                contentDescription = if (item.starred) "Unstar routine" else "Star routine",
-                tint = FlowTextPrimary,
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = FlowTextPrimary,
-            )
-            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-            FlowMetaText(routineCatalogSubtitle(item))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onToggleStar) {
+                Icon(
+                    imageVector = if (item.starred) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                    contentDescription = if (item.starred) "Unstar routine" else "Star routine",
+                    tint = FlowTextPrimary,
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = FlowTextPrimary,
+                )
+                Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+                FlowMetaText(routineCatalogSubtitle(item))
+            }
         }
     }
 }
