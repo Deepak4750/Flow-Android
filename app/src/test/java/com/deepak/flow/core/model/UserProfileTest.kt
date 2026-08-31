@@ -58,7 +58,8 @@ class UserProfileTest {
         assertEquals(null, UserProfile().waterBottleStyleIndex)
         assertEquals(0, parseWaterBottleStyleIndex(0))
         assertEquals(2, parseWaterBottleStyleIndex(2))
-        assertEquals(null, parseWaterBottleStyleIndex(3))
+        assertEquals(4, parseWaterBottleStyleIndex(4))
+        assertEquals(null, parseWaterBottleStyleIndex(5))
         assertEquals(null, parseWaterBottleStyleIndex(-1))
     }
 

@@ -39,7 +39,7 @@ data class UserProfile(
         const val MIN_WATER_GOAL_ML = 250
         const val MAX_WATER_GOAL_ML = 7000
         const val MAX_WATER_INTAKE_ML = 7000
-        const val BOTTLE_STYLE_COUNT = 3
+        const val BOTTLE_STYLE_COUNT = 5
         const val MIN_CUSTOM_WATER_ML = 10
         const val MAX_CUSTOM_WATER_ML = 999
         const val MAX_CUSTOM_WATER_QUICK_ADDS = 3

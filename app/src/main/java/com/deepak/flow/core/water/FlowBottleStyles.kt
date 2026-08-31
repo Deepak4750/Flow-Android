@@ -11,6 +11,8 @@ object FlowBottleStyles {
     fun drawableRes(index: Int): Int = when (index.coerceIn(0, lastIndex)) {
         0 -> R.drawable.bottle_01
         1 -> R.drawable.bottle_02
-        else -> R.drawable.bottle_03
+        2 -> R.drawable.bottle_03
+        3 -> R.drawable.bottle_04
+        else -> R.drawable.bottle_05
     }
 }
