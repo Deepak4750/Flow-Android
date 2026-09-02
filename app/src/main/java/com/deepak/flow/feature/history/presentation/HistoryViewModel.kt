@@ -9,6 +9,7 @@ import com.deepak.flow.core.history.HistoryCompletionDotLevel
 import com.deepak.flow.core.history.HistoryGraphLogic
 import com.deepak.flow.core.history.HistoryGraphPeriod
 import com.deepak.flow.core.history.HistorySeriesPoint
+import com.deepak.flow.core.model.expiredOn
 import com.deepak.flow.core.model.formatWaterLiters
 import com.deepak.flow.core.scheduling.SchedulingEngine
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -48,10 +49,17 @@ data class HistoryGraphUiState(
     val canGoBack: Boolean = false,
 )
 
+data class HistoryExpiredTaskItem(
+    val id: Long,
+    val title: String,
+    val subtitle: String,
+)
+
 data class HistoryUiState(
     val mode: HistoryMainMode = HistoryMainMode.CALENDAR,
     val calendar: HistoryCalendarUiState = HistoryCalendarUiState(),
     val graphs: HistoryGraphUiState = HistoryGraphUiState(),
+    val expiredTasks: List<HistoryExpiredTaskItem> = emptyList(),
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -187,11 +195,21 @@ class HistoryViewModel(
         mode,
         calendarState,
         graphState,
-    ) { selectedMode, calendar, graphs ->
+        reminderRepository.observeReminders(),
+    ) { selectedMode, calendar, graphs, reminders ->
+        val today = LocalDate.now(zoneId)
+        val expired = reminders.expiredOn(today).sortedBy { it.title.lowercase() }
         HistoryUiState(
             mode = selectedMode,
             calendar = calendar,
             graphs = graphs,
+            expiredTasks = expired.map { reminder ->
+                HistoryExpiredTaskItem(
+                    id = reminder.id,
+                    title = reminder.title,
+                    subtitle = historyScheduleSummary(reminder),
+                )
+            },
         )
     }.stateIn(
         scope = viewModelScope,

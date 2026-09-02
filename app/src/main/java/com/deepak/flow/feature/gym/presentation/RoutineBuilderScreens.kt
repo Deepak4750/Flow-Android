@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -30,8 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import com.deepak.flow.app.components.FlowDragReorderItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,15 +49,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.deepak.flow.R
+import com.deepak.flow.app.components.ExerciseNameField
+import com.deepak.flow.app.components.ExercisePickerSheet
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowButtonVariant
 import com.deepak.flow.app.components.FlowDialog
@@ -72,11 +77,10 @@ import com.deepak.flow.app.components.FlowTextField
 import com.deepak.flow.app.components.FlowUndoBanner
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowShell
-import com.deepak.flow.app.theme.FlowMotion
+import com.deepak.flow.app.theme.FlowSizes
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.app.theme.FlowSurfaceRaised
 import com.deepak.flow.app.theme.FlowBorder
-import com.deepak.flow.app.theme.FlowSizes
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.heading
@@ -86,7 +90,9 @@ import com.deepak.flow.app.theme.FlowTextPrimary
 import com.deepak.flow.app.theme.FlowTextSecondary
 import com.deepak.flow.app.theme.FlowTextTertiary
 import com.deepak.flow.app.theme.FlowWhite
+import com.deepak.flow.core.gym.GymEquipment
 import com.deepak.flow.core.gym.GymLimits
+import com.deepak.flow.core.gym.GymMuscleGroup
 import com.deepak.flow.core.gym.GymLogic
 import com.deepak.flow.core.gym.GymRoutineDay
 import com.deepak.flow.core.gym.GymRoutineExercise
@@ -107,9 +113,14 @@ fun RoutineBuilderScreen(
     onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onLeave: () -> Unit,
+    onDeleted: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.loadExerciseNameSuggestions()
+    }
     var showLeavePrompt by remember { mutableStateOf(false) }
 
     val requestLeave: () -> Unit = {
@@ -170,11 +181,32 @@ fun RoutineBuilderScreen(
     LaunchedEffect(uiState.leave) {
         if (uiState.leave) onLeave()
     }
+    LaunchedEffect(uiState.deleted) {
+        if (uiState.deleted) onDeleted()
+    }
     LaunchedEffect(uiState.message) {
         if (uiState.message != null) {
             delay(2_500)
             viewModel.clearMessage()
         }
+    }
+    LaunchedEffect(uiState.deleteBlockedMessage) {
+        if (uiState.deleteBlockedMessage != null) {
+            delay(2_500)
+            viewModel.clearDeleteBlockedMessage()
+        }
+    }
+
+    if (uiState.confirmDeleteRoutine) {
+        FlowDialog(
+            title = "Delete routine?",
+            message = "Delete ${uiState.name.trim().ifEmpty { "Routine" }}? This will remove the routine from your routine list.",
+            confirmText = "Delete",
+            dismissText = "Cancel",
+            destructive = true,
+            onConfirm = viewModel::confirmDeleteRoutine,
+            onDismiss = viewModel::dismissDeleteRoutine,
+        )
     }
 
     FlowShell(
@@ -211,10 +243,60 @@ fun RoutineBuilderScreen(
         val dayOrderKeys = remember { mutableStateListOf<String>() }
         val dayHeights = remember { mutableStateMapOf<String, Float>() }
         var swipeResetKey by remember { mutableIntStateOf(0) }
+        var pickerVisible by remember { mutableStateOf(false) }
+        var pickerDayKey by remember { mutableStateOf<String?>(null) }
+        var pickerExerciseStableKey by remember { mutableStateOf<String?>(null) }
+        var pickerMuscle by remember { mutableStateOf<GymMuscleGroup?>(null) }
+        var pickerEquipment by remember { mutableStateOf<GymEquipment?>(null) }
         val density = LocalDensity.current
         val defaultHeightPx = with(density) { DefaultDayHeightDp.toPx() }
         val dayGapPx = with(density) { (FlowSpacing.xl * 2 + 1.dp).toPx() }
         val scrollState = rememberScrollState()
+
+        LaunchedEffect(pickerVisible, uiState.exerciseSearchQuery, pickerMuscle, pickerEquipment) {
+            if (!pickerVisible) return@LaunchedEffect
+            viewModel.browseExercises(
+                query = uiState.exerciseSearchQuery,
+                muscleFilter = pickerMuscle,
+                equipmentFilter = pickerEquipment,
+            )
+        }
+
+        ExercisePickerSheet(
+            visible = pickerVisible,
+            query = uiState.exerciseSearchQuery,
+            onQueryChange = { query ->
+                viewModel.browseExercises(query, pickerMuscle, pickerEquipment)
+            },
+            results = uiState.exerciseSearchResults,
+            selectedMuscle = pickerMuscle,
+            onMuscleSelected = { muscle ->
+                pickerMuscle = muscle
+                viewModel.browseExercises(uiState.exerciseSearchQuery, muscle, pickerEquipment)
+            },
+            selectedEquipment = pickerEquipment,
+            onEquipmentSelected = { equipment ->
+                pickerEquipment = equipment
+                viewModel.browseExercises(uiState.exerciseSearchQuery, pickerMuscle, equipment)
+            },
+            onSelectExercise = { exerciseId, displayName ->
+                val dayKey = pickerDayKey
+                val stableKey = pickerExerciseStableKey
+                if (dayKey != null && stableKey != null) {
+                    viewModel.onExerciseSelected(dayKey, stableKey, exerciseId, displayName)
+                }
+                pickerVisible = false
+            },
+            onCreateCustomExercise = { displayName ->
+                val dayKey = pickerDayKey
+                val stableKey = pickerExerciseStableKey
+                if (dayKey != null && stableKey != null) {
+                    viewModel.onCreateCustomExercise(dayKey, stableKey, displayName)
+                }
+                pickerVisible = false
+            },
+            onDismiss = { pickerVisible = false },
+        )
 
         LaunchedEffect(uiState.days, draggingDayKey, lastCommittedOrderKeys) {
             if (draggingDayKey != null) return@LaunchedEffect
@@ -240,6 +322,14 @@ fun RoutineBuilderScreen(
         val daysByKey = remember(uiState.days) { uiState.days.associateBy { it.localKey } }
         val orderedDays = dayOrderKeys.mapNotNull { daysByKey[it] }
         val dragFromIndex = activeDragDayKey?.let { key -> dayOrderKeys.indexOf(key) } ?: -1
+        val reorderInProgress = activeDragDayKey != null
+
+        fun beginDayReorder(dayKey: String) {
+            swipeResetKey++
+            activeDragDayKey = dayKey
+            draggingDayKey = dayKey
+            dragOffsetY = 0f
+        }
 
         fun applyLiveDayReorder(movedKey: String, to: Int, days: List<GymRoutineDay>) {
             val from = dayOrderKeys.indexOf(movedKey)
@@ -275,7 +365,7 @@ fun RoutineBuilderScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .verticalScroll(scrollState),
+                .verticalScroll(scrollState, enabled = !reorderInProgress),
         ) {
             FlowTextField(
                 value = uiState.name,
@@ -301,40 +391,22 @@ fun RoutineBuilderScreen(
                     gapPx = dayGapPx,
                 )
 
-                Column(
-                    modifier = Modifier
-                        .zIndex(if (isDragging) 1f else 0f)
-                        .routineDayDragVisual(
-                            displacementY = displacementY,
-                            isDragging = isDragging,
-                        )
-                        .onSizeChanged { dayHeights[dayKey] = it.height.toFloat() },
+                FlowDragReorderItem(
+                    isDragging = isDragging,
+                    displacementY = displacementY,
+                    modifier = Modifier.onSizeChanged { dayHeights[dayKey] = it.height.toFloat() },
                 ) {
-                    FlowSwipeDeleteRow(
-                        enabled = canRemoveDay,
-                        resetKey = swipeResetKey,
-                        onDelete = {
-                            viewModel.deleteDay(dayKey)
-                            swipeResetKey++
-                        },
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
                     ) {
-                        RoutineDayBlock(
-                            day = day,
-                            dayIndex = dayIndex,
+                        DayDragHandle(
                             dayKey = dayKey,
-                            expanded = expanded,
+                            enabled = dayOrderKeys.size > 1,
                             isDragging = isDragging,
-                            canMove = dayOrderKeys.size > 1,
-                            expandedExerciseStableKey = uiState.expandedExerciseStableKey,
-                            onDayNameChange = { viewModel.onDayNameChange(dayKey, it) },
-                            onToggleExpanded = { viewModel.toggleDayExpanded(dayKey) },
-                            onDayDragStart = {
-                                activeDragDayKey = dayKey
-                                draggingDayKey = dayKey
-                                dragOffsetY = 0f
-                            },
-                            onDayDrag = { delta ->
-                                if (activeDragDayKey != dayKey) return@RoutineDayBlock
+                            onDragStart = { beginDayReorder(dayKey) },
+                            onDrag = { delta ->
+                                if (activeDragDayKey != dayKey) return@DayDragHandle
                                 dragOffsetY += delta
                                 val from = dayOrderKeys.indexOf(dayKey)
                                 if (from >= 0) {
@@ -352,34 +424,71 @@ fun RoutineBuilderScreen(
                                     }
                                 }
                             },
-                            onDayDragEnd = ::clearDayDragState,
-                            onDayDragCancel = ::clearDayDragState,
-                            onAddExercise = { viewModel.addExercise(dayKey) },
-                            onToggleExercise = { stableKey ->
-                                viewModel.toggleExerciseExpanded(dayKey, stableKey)
-                            },
-                            onExerciseNameChange = { stableKey, value ->
-                                viewModel.onExerciseNameChange(dayKey, stableKey, value)
-                            },
-                            onExerciseNoteChange = { stableKey, value ->
-                                viewModel.onExerciseNoteChange(dayKey, stableKey, value)
-                            },
-                            onToggleField = { stableKey, field ->
-                                viewModel.toggleTrackingField(dayKey, stableKey, field)
-                            },
-                            onStepSetCount = { stableKey, up ->
-                                viewModel.stepSetCount(dayKey, stableKey, up)
-                            },
-                            onDeleteExercise = { stableKey ->
-                                viewModel.deleteExercise(dayKey, stableKey)
-                            },
+                            onDragEnd = ::clearDayDragState,
+                            onDragCancel = ::clearDayDragState,
                         )
+                        FlowSwipeDeleteRow(
+                            modifier = Modifier.weight(1f),
+                            enabled = canRemoveDay,
+                            resetKey = swipeResetKey,
+                            swipeEnabled = !reorderInProgress,
+                            dragFloatingActive = isDragging,
+                            onDelete = {
+                                viewModel.deleteDay(dayKey)
+                                swipeResetKey++
+                            },
+                        ) {
+                            RoutineDayBlock(
+                                day = day,
+                                dayIndex = dayIndex,
+                                dayKey = dayKey,
+                                expanded = expanded,
+                                expandedExerciseStableKey = uiState.expandedExerciseStableKey,
+                                exerciseNameSuggestions = uiState.exerciseNameSuggestions,
+                                exerciseSearchResults = uiState.exerciseSearchResults,
+                                onDayNameChange = { viewModel.onDayNameChange(dayKey, it) },
+                                onToggleExpanded = { viewModel.toggleDayExpanded(dayKey) },
+                                onAddExercise = { viewModel.addExercise(dayKey) },
+                                onToggleExercise = { stableKey ->
+                                    viewModel.toggleExerciseExpanded(dayKey, stableKey)
+                                },
+                                onExerciseNameChange = { stableKey, value ->
+                                    viewModel.onExerciseSearchQueryChange(dayKey, stableKey, value)
+                                },
+                                onExerciseSelected = { stableKey, exerciseId, displayName ->
+                                    viewModel.onExerciseSelected(dayKey, stableKey, exerciseId, displayName)
+                                },
+                                onCreateCustomExercise = { stableKey, displayName ->
+                                    viewModel.onCreateCustomExercise(dayKey, stableKey, displayName)
+                                },
+                                onBrowseExercises = { stableKey ->
+                                    pickerDayKey = dayKey
+                                    pickerExerciseStableKey = stableKey
+                                    pickerMuscle = null
+                                    pickerEquipment = null
+                                    pickerVisible = true
+                                    viewModel.browseExercises("")
+                                },
+                                onExerciseNoteChange = { stableKey, value ->
+                                    viewModel.onExerciseNoteChange(dayKey, stableKey, value)
+                                },
+                                onToggleField = { stableKey, field ->
+                                    viewModel.toggleTrackingField(dayKey, stableKey, field)
+                                },
+                                onStepSetCount = { stableKey, up ->
+                                    viewModel.stepSetCount(dayKey, stableKey, up)
+                                },
+                                onDeleteExercise = { stableKey ->
+                                    viewModel.deleteExercise(dayKey, stableKey)
+                                },
+                            )
+                        }
                     }
-                    if (dayIndex < dayOrderKeys.lastIndex) {
-                        Spacer(modifier = Modifier.height(FlowSpacing.xl))
-                        FlowHairlineDivider()
-                        Spacer(modifier = Modifier.height(FlowSpacing.xl))
-                    }
+                }
+                if (dayIndex < dayOrderKeys.lastIndex) {
+                    Spacer(modifier = Modifier.height(FlowSpacing.xl))
+                    FlowHairlineDivider()
+                    Spacer(modifier = Modifier.height(FlowSpacing.xl))
                 }
                 }
             }
@@ -411,6 +520,18 @@ fun RoutineBuilderScreen(
                 onClick = viewModel::save,
                 enabled = uiState.canSave,
             )
+            if (uiState.isEditMode) {
+                Spacer(modifier = Modifier.height(FlowSpacing.sm))
+                FlowTextAction(
+                    text = "Delete routine",
+                    onClick = viewModel::requestDeleteRoutine,
+                    destructive = true,
+                )
+            }
+            uiState.deleteBlockedMessage?.let { message ->
+                Spacer(modifier = Modifier.height(FlowSpacing.sm))
+                FlowSupportingText(message)
+            }
             Spacer(modifier = Modifier.height(FlowSpacing.lg))
         }
 
@@ -501,112 +622,85 @@ internal fun dayDisplacementYSmooth(
 }
 
 @Composable
-private fun Modifier.routineDayDragVisual(
-    displacementY: Float,
-    isDragging: Boolean,
-): Modifier {
-    val liftScale by animateFloatAsState(
-        targetValue = if (isDragging) 1.008f else 1f,
-        animationSpec = tween(FlowMotion.FAST),
-        label = "routineDayDragLift",
-    )
-    val density = LocalDensity.current
-    val shadowPx = with(density) { if (isDragging) 3.dp.toPx() else 0f }
-    return graphicsLayer {
-        translationY = displacementY
-        scaleX = liftScale
-        scaleY = liftScale
-        shadowElevation = shadowPx
-        clip = false
-    }
-}
-
-@Composable
 private fun RoutineDayBlock(
     day: GymRoutineDay,
     dayIndex: Int,
     dayKey: String,
     expanded: Boolean,
-    isDragging: Boolean,
-    canMove: Boolean,
     expandedExerciseStableKey: String?,
+    exerciseNameSuggestions: List<String>,
+    exerciseSearchResults: List<com.deepak.flow.core.gym.GymExerciseSearchHit>,
     onDayNameChange: (String) -> Unit,
     onToggleExpanded: () -> Unit,
-    onDayDragStart: () -> Unit,
-    onDayDrag: (Float) -> Unit,
-    onDayDragEnd: () -> Unit,
-    onDayDragCancel: () -> Unit,
     onAddExercise: () -> Unit,
     onToggleExercise: (String) -> Unit,
     onExerciseNameChange: (String, String) -> Unit,
+    onExerciseSelected: (String, String, String) -> Unit,
+    onCreateCustomExercise: (String, String) -> Unit,
+    onBrowseExercises: (String) -> Unit,
     onExerciseNoteChange: (String, String) -> Unit,
     onToggleField: (String, TrackingField) -> Unit,
     onStepSetCount: (String, Boolean) -> Unit,
     onDeleteExercise: (String) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top,
-    ) {
-        DayDragHandle(
-            dayKey = dayKey,
-            enabled = canMove,
-            isDragging = isDragging,
-            onDragStart = onDayDragStart,
-            onDrag = onDayDrag,
-            onDragEnd = onDayDragEnd,
-            onDragCancel = onDayDragCancel,
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                DayTitleHeading(
-                    dayKey = day.localKey,
-                    dayIndex = dayIndex,
-                    title = day.name,
-                    isRestDay = day.isRestDay,
-                    onTitleChange = onDayNameChange,
-                    modifier = Modifier.weight(1f),
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DayTitleHeading(
+                dayKey = day.localKey,
+                dayIndex = dayIndex,
+                title = day.name,
+                isRestDay = day.isRestDay,
+                onTitleChange = onDayNameChange,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = onToggleExpanded) {
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse day" else "Expand day",
+                    tint = FlowTextSecondary,
                 )
-                IconButton(onClick = onToggleExpanded) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (expanded) "Collapse day" else "Expand day",
-                        tint = FlowTextSecondary,
-                    )
-                }
             }
-            if (!expanded) {
-                Spacer(modifier = Modifier.height(FlowSpacing.xs))
-                FlowMetaText(dayCollapsedSummary(day))
+        }
+        if (!expanded) {
+            Spacer(modifier = Modifier.height(FlowSpacing.xs))
+            FlowMetaText(dayCollapsedSummary(day))
+        } else {
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            if (day.isRestDay) {
+                FlowSupportingText("Rest day. No exercises.")
             } else {
-                Spacer(modifier = Modifier.height(FlowSpacing.lg))
-                if (day.isRestDay) {
-                    FlowSupportingText("Rest day. No exercises.")
-                } else {
-                    day.exercises.forEach { exercise ->
-                        val exerciseExpanded = expandedExerciseStableKey == exercise.stableKey
-                        RoutineExerciseBlock(
-                            exercise = exercise,
-                            expanded = exerciseExpanded,
-                            onToggle = { onToggleExercise(exercise.stableKey) },
-                            onNameChange = { onExerciseNameChange(exercise.stableKey, it) },
-                            onNoteChange = { onExerciseNoteChange(exercise.stableKey, it) },
-                            onToggleField = { field -> onToggleField(exercise.stableKey, field) },
-                            onStepSetCount = { up -> onStepSetCount(exercise.stableKey, up) },
-                            onDelete = { onDeleteExercise(exercise.stableKey) },
-                        )
-                        Spacer(modifier = Modifier.height(FlowSpacing.lg))
-                    }
-                    FlowButton(
-                        text = "Add Exercise",
-                        onClick = onAddExercise,
-                        variant = FlowButtonVariant.Secondary,
-                        leadingIcon = Icons.Default.Add,
+                day.exercises.forEach { exercise ->
+                    val exerciseExpanded = expandedExerciseStableKey == exercise.stableKey
+                    RoutineExerciseBlock(
+                        exercise = exercise,
+                        expanded = exerciseExpanded,
+                        nameSuggestions = exerciseNameSuggestions,
+                        searchResults = exerciseSearchResults,
+                        onToggle = { onToggleExercise(exercise.stableKey) },
+                        onNameChange = { onExerciseNameChange(exercise.stableKey, it) },
+                        onSelectExercise = { exerciseId, displayName ->
+                            onExerciseSelected(exercise.stableKey, exerciseId, displayName)
+                        },
+                        onCreateCustomExercise = { displayName ->
+                            onCreateCustomExercise(exercise.stableKey, displayName)
+                        },
+                        onBrowseExercises = { onBrowseExercises(exercise.stableKey) },
+                        onNoteChange = { onExerciseNoteChange(exercise.stableKey, it) },
+                        onToggleField = { field -> onToggleField(exercise.stableKey, field) },
+                        onStepSetCount = { up -> onStepSetCount(exercise.stableKey, up) },
+                        onDelete = { onDeleteExercise(exercise.stableKey) },
                     )
+                    Spacer(modifier = Modifier.height(FlowSpacing.lg))
                 }
+                FlowButton(
+                    text = "Add Exercise",
+                    onClick = onAddExercise,
+                    variant = FlowButtonVariant.Secondary,
+                    leadingIcon = Icons.Default.Add,
+                )
             }
         }
     }
@@ -627,32 +721,44 @@ private fun DayDragHandle(
     val currentOnDragEnd by rememberUpdatedState(onDragEnd)
     val currentOnDragCancel by rememberUpdatedState(onDragCancel)
 
-    Icon(
-        imageVector = Icons.Default.DragHandle,
-        contentDescription = "Drag to reorder day",
-        tint = when {
-            !enabled -> FlowTextDisabled
-            isDragging -> FlowTextPrimary
-            else -> FlowTextSecondary
-        },
+    Box(
         modifier = Modifier
-            .padding(end = FlowSpacing.sm)
-            .size(24.dp)
-            .then(
-                if (enabled) {
-                    Modifier.pointerInput(dayKey) {
-                        detectVerticalDragGestures(
-                            onDragStart = { currentOnDragStart() },
-                            onDragEnd = { currentOnDragEnd() },
-                            onDragCancel = { currentOnDragCancel() },
-                            onVerticalDrag = { _, dragAmount -> currentOnDrag(dragAmount) },
-                        )
-                    }
-                } else {
-                    Modifier
-                },
-            ),
-    )
+            .defaultMinSize(
+                minWidth = FlowSizes.touchTarget,
+                minHeight = FlowSizes.touchTarget,
+            )
+            .padding(end = FlowSpacing.sm),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Default.DragHandle,
+            contentDescription = "Drag to reorder day",
+            tint = when {
+                !enabled -> FlowTextDisabled
+                isDragging -> FlowTextPrimary
+                else -> FlowTextSecondary
+            },
+            modifier = Modifier
+                .size(FlowSizes.iconLg)
+                .then(
+                    if (enabled) {
+                        Modifier.pointerInput(dayKey) {
+                            detectVerticalDragGestures(
+                                onDragStart = { currentOnDragStart() },
+                                onDragEnd = { currentOnDragEnd() },
+                                onDragCancel = { currentOnDragCancel() },
+                                onVerticalDrag = { change, dragAmount ->
+                                    change.consume()
+                                    currentOnDrag(dragAmount)
+                                },
+                            )
+                        }
+                    } else {
+                        Modifier
+                    },
+                ),
+        )
+    }
 }
 
 @Composable
@@ -746,8 +852,13 @@ private fun dayCollapsedSummary(day: GymRoutineDay): String {
 private fun RoutineExerciseBlock(
     exercise: GymRoutineExercise,
     expanded: Boolean,
+    nameSuggestions: List<String>,
+    searchResults: List<com.deepak.flow.core.gym.GymExerciseSearchHit>,
     onToggle: () -> Unit,
     onNameChange: (String) -> Unit,
+    onSelectExercise: (String, String) -> Unit,
+    onCreateCustomExercise: (String) -> Unit,
+    onBrowseExercises: () -> Unit,
     onNoteChange: (String) -> Unit,
     onToggleField: (TrackingField) -> Unit,
     onStepSetCount: (Boolean) -> Unit,
@@ -775,11 +886,16 @@ private fun RoutineExerciseBlock(
         }
         return
     }
-    FlowTextField(
+    ExerciseNameField(
         value = exercise.name,
         onValueChange = onNameChange,
-        placeholder = "Exercise title",
-        singleLine = true,
+        suggestions = nameSuggestions,
+        searchResults = searchResults,
+        selectedExerciseId = exercise.exerciseId,
+        onSelectExercise = onSelectExercise,
+        onCreateCustomExercise = onCreateCustomExercise,
+        onBrowseExercises = onBrowseExercises,
+        placeholder = "Search exercises...",
     )
     Spacer(modifier = Modifier.height(FlowSpacing.md))
     FlowMetaText(trackingSummary(exercise.trackingFields))

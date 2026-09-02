@@ -19,11 +19,13 @@ data class GymWorkoutSet(
     val measurements: GymSetMeasurements = GymSetMeasurements(),
     val failure: Boolean = false,
     val saved: Boolean = false,
+    val skipped: Boolean = false,
 )
 
 data class GymWorkoutExercise(
     val id: Long = 0L,
     val workoutId: Long = 0L,
+    val exerciseId: String = "",
     val name: String,
     val sortOrder: Int,
     val note: String = "",
@@ -32,6 +34,8 @@ data class GymWorkoutExercise(
     /** Planned sets from the routine. 0 means unbounded (Free Workout). */
     val plannedSetCount: Int = 0,
     val skipped: Boolean = false,
+    /** Set when the user completes this exercise. Null means still in progress. */
+    val completedAtEpochMilli: Long? = null,
     val routineExerciseId: Long? = null,
     val exerciseStableKey: String? = null,
 )

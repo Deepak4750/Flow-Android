@@ -41,6 +41,10 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 handleActiveWorkoutRestore(context)
                 return
             }
+            ActiveWorkoutNotificationIntents.ACTION_SKIP_REST -> {
+                handleActiveWorkoutSkipRest(context, intent)
+                return
+            }
         }
 
         val reminderId = intent.getLongExtra(EXTRA_REMINDER_ID, -1L)
@@ -58,6 +62,20 @@ class NotificationActionReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 execute(context, app, reminderId, plan)
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+
+    private fun handleActiveWorkoutSkipRest(context: Context, intent: Intent) {
+        val workoutId = intent.getLongExtra(ActiveWorkoutNotificationIntents.EXTRA_WORKOUT_ID, -1L)
+        if (workoutId < 0L) return
+        val pendingResult = goAsync()
+        val app = context.applicationContext as FlowApplication
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                app.activeWorkoutNotificationController.skipRestIfActive(workoutId)
             } finally {
                 pendingResult.finish()
             }

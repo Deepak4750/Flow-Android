@@ -36,7 +36,7 @@ object GymLogic {
         if (fields.isEmpty()) return false
         return fields.any { field ->
             when (field) {
-                TrackingField.WEIGHT -> (measurements.weight ?: 0.0) > 0.0
+                TrackingField.WEIGHT -> measurements.weight != null && measurements.weight >= 0.0
                 TrackingField.REPS -> (measurements.reps ?: 0) > 0
                 TrackingField.DURATION -> (measurements.durationSeconds ?: 0) > 0
                 TrackingField.DISTANCE -> (measurements.distance ?: 0.0) > 0.0
@@ -59,7 +59,7 @@ object GymLogic {
         if (fields.isEmpty()) return false
         return fields.all { field ->
             when (field) {
-                TrackingField.WEIGHT -> (measurements.weight ?: 0.0) > 0.0
+                TrackingField.WEIGHT -> measurements.weight != null && measurements.weight >= 0.0
                 TrackingField.REPS -> (measurements.reps ?: 0) >= 1
                 TrackingField.DURATION -> (measurements.durationSeconds ?: 0) > 0
                 TrackingField.DISTANCE -> (measurements.distance ?: 0.0) > 0.0
@@ -76,7 +76,7 @@ object GymLogic {
         val current = raw.toDoubleOrNull() ?: 0.0
         val delta = if (up) 0.5 else -0.5
         val next = ((kotlin.math.round((current + delta) * 2.0)) / 2.0).coerceAtLeast(0.0)
-        return if (next == 0.0) "" else formatNumber(next)
+        return formatNumber(next)
     }
 
     fun stepWholeValue(raw: String, up: Boolean, minimum: Int = 1): String {
@@ -109,24 +109,6 @@ object GymLogic {
         return String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, seconds)
     }
 
-    /**
-     * Content lines for the active-workout notification.
-     * Times are derived from timestamps; callers supply [nowEpochMilli].
-     */
-    fun activeWorkoutNotificationBody(
-        exerciseName: String?,
-        workoutStartedAtEpochMilli: Long,
-        exerciseStartedAtEpochMilli: Long?,
-        nowEpochMilli: Long,
-    ): String {
-        val workoutLine = "Workout ${formatStopwatch(workoutStartedAtEpochMilli, nowEpochMilli)}"
-        if (exerciseName.isNullOrBlank() || exerciseStartedAtEpochMilli == null) {
-            return workoutLine
-        }
-        val exerciseLine = "Exercise ${formatExerciseElapsed(exerciseStartedAtEpochMilli, nowEpochMilli)}"
-        return "$exerciseName\n$workoutLine\n$exerciseLine"
-    }
-
     fun formatCountdown(remainingSeconds: Int): String {
         val safe = remainingSeconds.coerceAtLeast(0)
         val minutes = safe / 60
@@ -145,7 +127,7 @@ object GymLogic {
      * Failed sets still count: the weight was lifted.
      */
     fun setVolumeKg(set: GymWorkoutSet, sessionUnit: WeightUnit): Double? {
-        if (!set.saved) return null
+        if (!set.saved || set.skipped) return null
         val weight = set.measurements.weight?.takeIf { it > 0.0 } ?: return null
         val reps = set.measurements.reps?.takeIf { it > 0 } ?: return null
         val unit = set.measurements.weightUnit ?: sessionUnit
@@ -221,6 +203,7 @@ object GymLogic {
         fields: Set<TrackingField>,
         displayUnit: WeightUnit,
     ): String {
+        if (set.skipped) return "Skipped"
         val parts = mutableListOf<String>()
         fields.forEach { field ->
             when (field) {
@@ -348,10 +331,16 @@ object GymLogic {
 
     fun matchPreviousExercise(
         previousExercises: List<GymWorkoutExercise>,
+        exerciseId: String?,
         routineExerciseId: Long?,
         exerciseStableKey: String?,
         name: String,
     ): GymWorkoutExercise? {
+        if (!exerciseId.isNullOrBlank()) {
+            previousExercises.firstOrNull {
+                it.exerciseId == exerciseId
+            }?.let { return it }
+        }
         if (!exerciseStableKey.isNullOrBlank()) {
             previousExercises.firstOrNull {
                 it.exerciseStableKey == exerciseStableKey
@@ -428,7 +417,7 @@ object GymLogic {
     /** True when [measurements] has a recorded value for [field]. */
     fun hasValueForField(measurements: GymSetMeasurements, field: TrackingField): Boolean =
         when (field) {
-            TrackingField.WEIGHT -> (measurements.weight ?: 0.0) > 0.0
+                TrackingField.WEIGHT -> measurements.weight != null && measurements.weight >= 0.0
             TrackingField.REPS -> (measurements.reps ?: 0) > 0
             TrackingField.DURATION -> (measurements.durationSeconds ?: 0) > 0
             TrackingField.DISTANCE -> (measurements.distance ?: 0.0) > 0.0

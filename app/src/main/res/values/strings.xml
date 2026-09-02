@@ -17,6 +17,7 @@
     <string name="content_description_back">Back</string>
     <string name="content_description_create_reminder">Create task</string>
     <string name="content_description_delete_reminder">Delete %1$s</string>
+    <string name="content_description_delete_routine">Delete %1$s</string>
     <string name="content_description_weekday_picker">Days of the week. Tap to toggle, or hold and swipe to select.</string>
 
     <!-- Actions -->
@@ -43,8 +44,9 @@
     <string name="notification_water_add_500">500 ml</string>
     <string name="notification_water_dismiss">Dismiss</string>
     <string name="notification_workout_in_progress">WORKOUT IN PROGRESS</string>
+    <string name="notification_active_workout_skip_rest">Skip rest</string>
     <string name="notification_channel_gym">Gym</string>
-    <string name="notification_channel_gym_description">Active Free Workout status</string>
+    <string name="notification_channel_gym_description">Active workout status</string>
     <string name="notification_channel_gym_events">Gym alerts</string>
     <string name="notification_channel_gym_events_description">Rest complete and other Gym alerts</string>
     <string name="notification_rest_complete_title">REST COMPLETE</string>
@@ -69,19 +71,27 @@
     <string name="settings_snooze_value_description">snooze interval</string>
     <string name="settings_section_gym">Gym</string>
     <string name="settings_gym_supporting">Defaults for Free Workout. Changing these does not rewrite past sets.</string>
-    <string name="settings_label_weight_unit">Weight Unit</string>
+    <string name="settings_label_weight_unit">Weight unit</string>
+    <string name="settings_weight_unit_kg">Kilograms (kg)</string>
+    <string name="settings_weight_unit_lb">Pounds (lb)</string>
     <string name="settings_label_set_rest">Set Rest</string>
     <string name="settings_label_exercise_rest">Exercise Rest</string>
+    <string name="settings_rest_invalid_set">Set Rest must be at least 10 seconds.</string>
+    <string name="settings_rest_invalid_exercise">Exercise Rest must be at least 10 seconds.</string>
     <string name="settings_unit_seconds">sec</string>
     <string name="settings_set_rest_value_description">set rest seconds</string>
     <string name="settings_exercise_rest_value_description">exercise rest seconds</string>
     <string name="settings_section_data">Data</string>
     <string name="settings_data_supporting">Everything stays on this device.</string>
     <string name="settings_label_keep_data">Keep data</string>
-    <string name="settings_keep_data_reason">If you uninstall Flow and install it later, your tasks will still be here.</string>
+    <string name="settings_keep_data_reason">If you uninstall Flow and install it later, your tasks, water logs, gym routines, and settings can still be here.</string>
     <string name="settings_delete_all_title">Delete all tasks?</string>
     <string name="settings_delete_all_message">All %1$d tasks and their alarms will be removed. This can\'t be undone.</string>
-
+    <string name="settings_section_features">Features</string>
+    <string name="settings_features_supporting">Turn a section off when you are not using it.</string>
+    <string name="settings_label_tasks">Tasks</string>
+    <string name="settings_label_water">H₂O</string>
+    <string name="settings_label_gym_feature">Gym</string>
     <!-- About -->
     <string name="about_title">About</string>
     <string name="about_tagline">A quiet companion for following through.</string>

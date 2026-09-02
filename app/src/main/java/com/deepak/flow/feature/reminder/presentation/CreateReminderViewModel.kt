@@ -12,6 +12,10 @@ import com.deepak.flow.app.theme.CategoryAccent
 import com.deepak.flow.core.model.ActiveHours
 import com.deepak.flow.core.model.Category
 import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.model.ReminderExpirationForm
+import com.deepak.flow.core.model.ReminderExpirationMode
+import com.deepak.flow.core.model.effectiveExpirationMode
+import com.deepak.flow.core.model.toReminderFields
 import com.deepak.flow.core.model.SavedCustomCategory
 import com.deepak.flow.core.model.Schedule
 import com.deepak.flow.core.model.savedCustomCategories
@@ -46,14 +50,16 @@ data class CreateReminderUiState(
     val activeHoursStart: LocalTime = LocalTime.of(8, 0),
     val activeHoursEnd: LocalTime = LocalTime.of(23, 0),
     val startDate: LocalDate = LocalDate.now(),
-    val endDateEnabled: Boolean = false,
+    val expirationMode: ReminderExpirationMode = ReminderExpirationMode.NONE,
     val endDate: LocalDate? = null,
+    val occurrenceLimit: Int = ReminderExpirationForm.DEFAULT_OCCURRENCE_LIMIT,
     val reason: String = "",
     val note: String = "",
     val accentColorIndex: Int = CategoryAccent.DefaultCustomIndex,
     val savedCustomCategories: List<SavedCustomCategory> = emptyList(),
     val isSaving: Boolean = false,
     val isLoading: Boolean = false,
+    val reminderNotFound: Boolean = false,
     val needsNotificationPermission: Boolean = false,
     val enabled: Boolean = true,
     val hasUnsavedChanges: Boolean = false,
@@ -76,6 +82,10 @@ data class CreateReminderUiState(
 
     val isIntervalSchedule: Boolean
         get() = scheduleType == ScheduleType.EVERY_X_DAYS || scheduleType == ScheduleType.EVERY_X_HOURS
+
+    /** Active hours UI is only relevant for Every few hours reminders. */
+    val showActiveHours: Boolean
+        get() = scheduleType == ScheduleType.EVERY_X_HOURS
 }
 
 enum class ScheduleType(val displayName: String) {
@@ -93,6 +103,7 @@ fun defaultNewReminderTime(now: LocalTime = LocalTime.now()): LocalTime =
 class CreateReminderViewModel(
     application: Application,
     private val editReminderId: Long? = null,
+    private val reuseFromReminderId: Long? = null,
 ) : AndroidViewModel(application) {
 
     private val repository: ReminderRepository =
@@ -122,6 +133,7 @@ class CreateReminderViewModel(
             }
         }
         editReminderId?.let { loadReminder(it) }
+        reuseFromReminderId?.let { loadForReuse(it) }
     }
 
     private fun publish(state: CreateReminderUiState): CreateReminderUiState {
@@ -137,7 +149,10 @@ class CreateReminderViewModel(
     private fun loadReminder(id: Long) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val reminder = repository.getReminder(id) ?: return@launch
+            val reminder = repository.getReminder(id) ?: run {
+                _uiState.update { it.copy(isLoading = false, reminderNotFound = true) }
+                return@launch
+            }
             val loaded = CreateReminderUiState(
                 isEditMode = true,
                 editingReminderId = id,
@@ -159,8 +174,9 @@ class CreateReminderViewModel(
                 activeHoursStart = reminder.activeHours?.startTime ?: LocalTime.of(8, 0),
                 activeHoursEnd = reminder.activeHours?.endTime ?: LocalTime.of(23, 0),
                 startDate = reminder.startDate,
-                endDateEnabled = reminder.endDate != null,
+                expirationMode = reminder.effectiveExpirationMode(),
                 endDate = reminder.endDate,
+                occurrenceLimit = reminder.occurrenceLimit ?: DEFAULT_OCCURRENCE_LIMIT,
                 reason = reminder.reason.orEmpty(),
                 note = reminder.note.orEmpty(),
                 accentColorIndex = reminder.accentColorIndex
@@ -178,6 +194,58 @@ class CreateReminderViewModel(
             }
         }
     }
+
+    private fun loadForReuse(id: Long) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val reminder = repository.getReminder(id) ?: run {
+                _uiState.update { it.copy(isLoading = false, reminderNotFound = true) }
+                return@launch
+            }
+            val loaded = reminderFromDomain(reminder).copy(
+                isEditMode = false,
+                editingReminderId = null,
+                expirationMode = ReminderExpirationMode.NONE,
+                endDate = null,
+                occurrenceLimit = ReminderExpirationForm.DEFAULT_OCCURRENCE_LIMIT,
+            )
+            _uiState.update { current ->
+                loaded.copy(
+                    isLoading = false,
+                    savedCustomCategories = current.savedCustomCategories,
+                )
+            }
+        }
+    }
+
+    private fun reminderFromDomain(reminder: Reminder): CreateReminderUiState = CreateReminderUiState(
+        task = reminder.title,
+        category = reminder.category,
+        customCategoryName = reminder.customCategoryName.orEmpty(),
+        scheduleType = reminder.schedule.toScheduleType(),
+        weeklyDays = (reminder.schedule as? Schedule.Weekly)?.daysOfWeek
+            ?: setOf(DayOfWeek.MONDAY),
+        monthlyDay = (reminder.schedule as? Schedule.Monthly)?.dayOfMonth ?: 1,
+        everyXDays = (reminder.schedule as? Schedule.EveryXDays)?.intervalDays ?: 3,
+        everyXHours = (reminder.schedule as? Schedule.EveryXHours)?.intervalHours ?: 4,
+        reminderTime = reminder.reminderTimes.firstOrNull() ?: LocalTime.of(19, 0),
+        intervalAnchorIsNow = when (reminder.schedule) {
+            is Schedule.EveryXDays, is Schedule.EveryXHours -> false
+            else -> true
+        },
+        activeHoursEnabled = reminder.activeHours != null,
+        activeHoursStart = reminder.activeHours?.startTime ?: LocalTime.of(8, 0),
+        activeHoursEnd = reminder.activeHours?.endTime ?: LocalTime.of(23, 0),
+        startDate = reminder.startDate,
+        expirationMode = reminder.effectiveExpirationMode(),
+        endDate = reminder.endDate,
+        occurrenceLimit = reminder.occurrenceLimit ?: DEFAULT_OCCURRENCE_LIMIT,
+        reason = reminder.reason.orEmpty(),
+        note = reminder.note.orEmpty(),
+        accentColorIndex = reminder.accentColorIndex
+            ?: CategoryAccent.stableIndex(reminder.customCategoryName),
+        enabled = reminder.enabled,
+    )
 
     fun updateTask(value: String) = updateState { it.copy(task = value) }
     fun updateCategory(value: Category) = updateState { it.copy(category = value) }
@@ -247,17 +315,44 @@ class CreateReminderViewModel(
         )
     }
     fun updateStartDate(date: LocalDate) = updateState { it.copy(startDate = date) }
-    fun setEndDateEnabled(enabled: Boolean) = updateState { state ->
+    fun setExpirationMode(mode: ReminderExpirationMode) = updateState { state ->
+        val form = ReminderExpirationForm(
+            mode = state.expirationMode,
+            endDate = state.endDate,
+            occurrenceLimit = state.occurrenceLimit,
+        ).withMode(mode, state.startDate)
         state.copy(
-            endDateEnabled = enabled,
-            endDate = when {
-                !enabled -> null
-                state.endDate != null -> state.endDate
-                else -> state.startDate.plusMonths(1)
-            },
+            expirationMode = form.mode,
+            endDate = form.endDate,
+            occurrenceLimit = form.occurrenceLimit,
         )
     }
-    fun updateEndDate(date: LocalDate) = updateState { it.copy(endDate = date, endDateEnabled = true) }
+    fun updateEndDate(date: LocalDate) = updateState {
+        it.copy(expirationMode = ReminderExpirationMode.END_DATE, endDate = date)
+    }
+    fun updateOccurrenceLimit(value: Int) = updateState {
+        it.copy(
+            expirationMode = ReminderExpirationMode.OCCURRENCE_LIMIT,
+            occurrenceLimit = value.coerceIn(OCCURRENCE_LIMIT_MIN, OCCURRENCE_LIMIT_MAX),
+        )
+    }
+    fun updateOccurrenceLimitInput(input: String) {
+        val digits = input.filter { it.isDigit() }.take(4)
+        if (digits.isEmpty()) {
+            updateState { it.copy(occurrenceLimit = OCCURRENCE_LIMIT_MIN) }
+            return
+        }
+        val parsed = digits.toIntOrNull()?.coerceIn(OCCURRENCE_LIMIT_MIN, OCCURRENCE_LIMIT_MAX)
+            ?: OCCURRENCE_LIMIT_MIN
+        updateState {
+            it.copy(
+                expirationMode = ReminderExpirationMode.OCCURRENCE_LIMIT,
+                occurrenceLimit = parsed,
+            )
+        }
+    }
+    fun incrementOccurrenceLimit() = updateOccurrenceLimit(_uiState.value.occurrenceLimit + 1)
+    fun decrementOccurrenceLimit() = updateOccurrenceLimit(_uiState.value.occurrenceLimit - 1)
     fun toggleAdvanced() = updateState { it.copy(showAdvanced = !it.showAdvanced) }
     fun setActiveHoursEnabled(enabled: Boolean) = updateState { it.copy(activeHoursEnabled = enabled) }
     fun updateActiveHoursStart(value: LocalTime) = updateState { it.copy(activeHoursStart = value) }
@@ -341,6 +436,12 @@ class CreateReminderViewModel(
                 }
                 else -> listOf(state.reminderTime)
             }
+            val expirationForm = ReminderExpirationForm(
+                mode = state.expirationMode,
+                endDate = state.endDate,
+                occurrenceLimit = state.occurrenceLimit,
+            ).normalizedForSave()
+            val expirationFields = expirationForm.toReminderFields()
             val reminder = Reminder(
                 id = state.editingReminderId ?: 0L,
                 title = state.task.trim(),
@@ -353,13 +454,16 @@ class CreateReminderViewModel(
                 schedule = schedule,
                 reminderTimes = times,
                 startDate = startDate,
-                endDate = if (state.endDateEnabled) state.endDate else null,
-                enabled = state.enabled,
-                activeHours = if (state.activeHoursEnabled) {
-                    ActiveHours(state.activeHoursStart, state.activeHoursEnd)
+                expirationMode = expirationFields.first,
+                endDate = expirationFields.second,
+                occurrenceLimit = expirationFields.third,
+                occurrencesDelivered = if (state.isEditMode && state.editingReminderId != null) {
+                    repository.getReminder(state.editingReminderId)?.occurrencesDelivered ?: 0
                 } else {
-                    null
+                    0
                 },
+                enabled = state.enabled,
+                activeHours = activeHoursForPersistence(state),
                 reason = state.reason.takeIf { it.isNotBlank() },
                 note = state.note.takeIf { it.isNotBlank() },
                 accentColorIndex = if (state.category == Category.CUSTOM) {
@@ -379,10 +483,25 @@ class CreateReminderViewModel(
     }
 
     companion object {
+        /**
+         * Persists configured active hours whenever enabled, even if the current
+         * schedule type hides the UI, so switching back to Every few hours restores them.
+         * Scheduling ignores stored hours unless the saved schedule is EveryXHours.
+         */
+        internal fun activeHoursForPersistence(state: CreateReminderUiState): ActiveHours? =
+            if (state.activeHoursEnabled) {
+                ActiveHours(state.activeHoursStart, state.activeHoursEnd)
+            } else {
+                null
+            }
+
         const val INTERVAL_DAYS_MIN = 1
         const val INTERVAL_DAYS_MAX = 365
         const val INTERVAL_HOURS_MIN = 1
         const val INTERVAL_HOURS_MAX = 168
+        const val OCCURRENCE_LIMIT_MIN = ReminderExpirationForm.MIN_OCCURRENCE_LIMIT
+        const val OCCURRENCE_LIMIT_MAX = ReminderExpirationForm.MAX_OCCURRENCE_LIMIT
+        const val DEFAULT_OCCURRENCE_LIMIT = ReminderExpirationForm.DEFAULT_OCCURRENCE_LIMIT
     }
 }
 
@@ -419,8 +538,9 @@ private data class ReminderFormSnapshot(
     val activeHoursStart: LocalTime,
     val activeHoursEnd: LocalTime,
     val startDate: LocalDate,
-    val endDateEnabled: Boolean,
+    val expirationMode: ReminderExpirationMode,
     val endDate: LocalDate?,
+    val occurrenceLimit: Int,
     val reason: String,
     val note: String,
     val accentColorIndex: Int,
@@ -442,8 +562,9 @@ private data class ReminderFormSnapshot(
             activeHoursStart = state.activeHoursStart,
             activeHoursEnd = state.activeHoursEnd,
             startDate = state.startDate,
-            endDateEnabled = state.endDateEnabled,
+            expirationMode = state.expirationMode,
             endDate = state.endDate,
+            occurrenceLimit = state.occurrenceLimit,
             reason = state.reason.trim(),
             note = state.note.trim(),
             accentColorIndex = state.accentColorIndex,

@@ -7,6 +7,9 @@ import com.deepak.flow.FlowApplication
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.gym.GymLimits
+import com.deepak.flow.core.gym.GymRestSecondsInput
+import com.deepak.flow.core.gym.GymRestSettingsField
+import com.deepak.flow.core.gym.GymRestSettingsLeaveGuard
 import com.deepak.flow.core.gym.WeightUnit
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.repository.ProfileRepository
@@ -27,6 +30,9 @@ data class SettingsUiState(
     val gymWeightUnit: WeightUnit = WeightUnit.KG,
     val gymSetRestSeconds: Int = GymLimits.SET_REST_DEFAULT_SECONDS,
     val gymExerciseRestSeconds: Int = GymLimits.EXERCISE_REST_DEFAULT_SECONDS,
+    val gymSetRestEditingText: String? = null,
+    val gymExerciseRestEditingText: String? = null,
+    val gymRestBlockField: GymRestSettingsField? = null,
     val reminderCount: Int = 0,
     val keepDataOnUninstall: Boolean = true,
     val isSaving: Boolean = false,
@@ -148,6 +154,14 @@ class SettingsViewModel(
         }
     }
 
+    fun setGymWeightUnit(unit: WeightUnit) {
+        if (_uiState.value.gymWeightUnit == unit) return
+        _uiState.update { it.copy(gymWeightUnit = unit) }
+        viewModelScope.launch {
+            profileRepository.updateGymWeightUnit(unit.name)
+        }
+    }
+
     fun cycleGymWeightUnit() {
         val next = when (_uiState.value.gymWeightUnit) {
             WeightUnit.KG -> WeightUnit.LB
@@ -160,31 +174,118 @@ class SettingsViewModel(
     }
 
     fun incrementGymSetRest() {
+        _uiState.update { it.copy(gymSetRestEditingText = null, gymRestBlockField = null) }
         updateGymSetRest(_uiState.value.gymSetRestSeconds + 10)
     }
 
     fun decrementGymSetRest() {
+        _uiState.update { it.copy(gymSetRestEditingText = null, gymRestBlockField = null) }
         updateGymSetRest(_uiState.value.gymSetRestSeconds - 10)
     }
 
+    fun onGymSetRestEditingChange(raw: String) {
+        _uiState.update {
+            it.copy(
+                gymSetRestEditingText = raw,
+                gymRestBlockField = null,
+            )
+        }
+    }
+
     fun onGymSetRestInput(raw: String) {
-        if (raw.isEmpty()) return
-        val parsed = raw.toIntOrNull() ?: return
-        updateGymSetRest(parsed)
+        if (!GymRestSecondsInput.isValidForSettingsLeave(
+                raw,
+                GymLimits.SET_REST_MIN_SECONDS,
+                GymLimits.SET_REST_MAX_SECONDS,
+            )
+        ) {
+            return
+        }
+        val seconds = GymRestSecondsInput.commit(
+            raw,
+            GymLimits.SET_REST_MIN_SECONDS,
+            GymLimits.SET_REST_MAX_SECONDS,
+        )
+        _uiState.update { it.copy(gymSetRestEditingText = null, gymRestBlockField = null) }
+        updateGymSetRest(seconds)
     }
 
     fun incrementGymExerciseRest() {
+        _uiState.update { it.copy(gymExerciseRestEditingText = null, gymRestBlockField = null) }
         updateGymExerciseRest(_uiState.value.gymExerciseRestSeconds + 10)
     }
 
     fun decrementGymExerciseRest() {
+        _uiState.update { it.copy(gymExerciseRestEditingText = null, gymRestBlockField = null) }
         updateGymExerciseRest(_uiState.value.gymExerciseRestSeconds - 10)
     }
 
+    fun onGymExerciseRestEditingChange(raw: String) {
+        _uiState.update {
+            it.copy(
+                gymExerciseRestEditingText = raw,
+                gymRestBlockField = null,
+            )
+        }
+    }
+
     fun onGymExerciseRestInput(raw: String) {
-        if (raw.isEmpty()) return
-        val parsed = raw.toIntOrNull() ?: return
-        updateGymExerciseRest(parsed)
+        if (!GymRestSecondsInput.isValidForSettingsLeave(
+                raw,
+                GymLimits.EXERCISE_REST_MIN_SECONDS,
+                GymLimits.EXERCISE_REST_MAX_SECONDS,
+            )
+        ) {
+            return
+        }
+        val seconds = GymRestSecondsInput.commit(
+            raw,
+            GymLimits.EXERCISE_REST_MIN_SECONDS,
+            GymLimits.EXERCISE_REST_MAX_SECONDS,
+        )
+        _uiState.update { it.copy(gymExerciseRestEditingText = null, gymRestBlockField = null) }
+        updateGymExerciseRest(seconds)
+    }
+
+    fun onGymSetRestCommitRejected() {
+        _uiState.update { it.copy(gymRestBlockField = GymRestSettingsField.SET_REST) }
+    }
+
+    fun onGymExerciseRestCommitRejected() {
+        _uiState.update { it.copy(gymRestBlockField = GymRestSettingsField.EXERCISE_REST) }
+    }
+
+    /**
+     * Returns true when Settings may be closed. Persists any valid in-progress drafts first.
+     */
+    fun tryLeaveSettings(onLeave: () -> Unit): Boolean {
+        val state = _uiState.value
+        val setRestRaw = state.gymSetRestEditingText ?: state.gymSetRestSeconds.toString()
+        val exerciseRestRaw = state.gymExerciseRestEditingText
+            ?: state.gymExerciseRestSeconds.toString()
+        val validation = GymRestSettingsLeaveGuard.validate(
+            setRestRaw = setRestRaw,
+            exerciseRestRaw = exerciseRestRaw,
+            minSeconds = GymLimits.SET_REST_MIN_SECONDS,
+            maxSeconds = GymLimits.SET_REST_MAX_SECONDS,
+        )
+        if (!validation.canLeave) {
+            _uiState.update { it.copy(gymRestBlockField = validation.invalidField) }
+            return false
+        }
+        if (state.gymSetRestEditingText != null) {
+            onGymSetRestInput(setRestRaw)
+        }
+        if (state.gymExerciseRestEditingText != null) {
+            onGymExerciseRestInput(exerciseRestRaw)
+        }
+        _uiState.update { it.copy(gymRestBlockField = null) }
+        onLeave()
+        return true
+    }
+
+    fun clearGymRestBlock() {
+        _uiState.update { it.copy(gymRestBlockField = null) }
     }
 
     private fun updateGymSetRest(seconds: Int) {

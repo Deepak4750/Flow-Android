@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         ReminderEntity::class,
+        ReminderOccurrenceDeliveryEntity::class,
         UserProfileEntity::class,
         ReminderDayCompletionEntity::class,
         WaterDayEntity::class,
@@ -18,19 +19,24 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         GymRoutineEntity::class,
         GymRoutineDayEntity::class,
         GymRoutineExerciseEntity::class,
+        GymCustomExerciseEntity::class,
+        GymExerciseOverrideEntity::class,
     ],
-    version = 29,
+    version = 36,
     exportSchema = true,
 )
 @TypeConverters(DatabaseConverters::class)
 abstract class FlowDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
+    abstract fun reminderOccurrenceDao(): ReminderOccurrenceDao
     abstract fun userProfileDao(): UserProfileDao
     abstract fun reminderCompletionDao(): ReminderCompletionDao
     abstract fun waterDayDao(): WaterDayDao
     abstract fun historyDao(): HistoryDao
     abstract fun gymWorkoutDao(): GymWorkoutDao
     abstract fun gymRoutineDao(): GymRoutineDao
+    abstract fun gymCustomExerciseDao(): GymCustomExerciseDao
+    abstract fun gymExerciseOverrideDao(): GymExerciseOverrideDao
 
     companion object {
         val MIGRATION_3_4 = object : Migration(3, 4) {
@@ -755,6 +761,163 @@ abstract class FlowDatabase : RoomDatabase() {
                 if (SqliteSchema.gymRoutinesNeedsRebuild(db)) {
                     SqliteSchema.rebuildGymRoutinesTable(db)
                 }
+            }
+        }
+
+        val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "user_profile",
+                    "menuTutorialStatus",
+                    "TEXT NOT NULL DEFAULT 'COMPLETED'",
+                )
+            }
+        }
+
+        val MIGRATION_30_31 = object : Migration(30, 31) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "user_profile",
+                    "routineSwipeDeleteHintShown",
+                    "INTEGER NOT NULL DEFAULT 1",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db,
+                    "user_profile",
+                    "builderDaySwipeDeleteHintShown",
+                    "INTEGER NOT NULL DEFAULT 1",
+                )
+            }
+        }
+
+        val MIGRATION_31_32 = object : Migration(31, 32) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "reminders",
+                    column = "expirationMode",
+                    spec = "TEXT NOT NULL DEFAULT 'NONE'",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "reminders",
+                    column = "occurrenceLimit",
+                    spec = "INTEGER",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "reminders",
+                    column = "occurrencesDelivered",
+                    spec = "INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    """
+                    UPDATE reminders
+                    SET expirationMode = 'END_DATE'
+                    WHERE endDateEpochDay IS NOT NULL
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS reminder_occurrence_deliveries (
+                        reminderId INTEGER NOT NULL,
+                        scheduledAtEpochMilli INTEGER NOT NULL,
+                        PRIMARY KEY(reminderId, scheduledAtEpochMilli)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        val MIGRATION_32_33 = object : Migration(32, 33) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "gym_workout_exercises",
+                    column = "completedAtEpochMilli",
+                    spec = "INTEGER",
+                )
+            }
+        }
+
+        val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS gym_custom_exercises (
+                        id TEXT NOT NULL,
+                        displayName TEXT NOT NULL,
+                        normalizedKey TEXT NOT NULL,
+                        createdAtEpochMilli INTEGER NOT NULL,
+                        PRIMARY KEY(id)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_gym_custom_exercises_normalizedKey ON gym_custom_exercises (normalizedKey)",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "gym_routine_exercises",
+                    column = "exerciseId",
+                    spec = "TEXT NOT NULL DEFAULT ''",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "gym_workout_exercises",
+                    column = "exerciseId",
+                    spec = "TEXT NOT NULL DEFAULT ''",
+                )
+                GymExerciseMigration.backfillExerciseIds(db)
+            }
+        }
+
+        val MIGRATION_34_35 = object : Migration(34, 35) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS gym_exercise_overrides (
+                        exerciseId TEXT NOT NULL,
+                        displayName TEXT,
+                        primaryMuscle TEXT,
+                        secondaryMuscles TEXT,
+                        equipment TEXT,
+                        updatedAtEpochMilli INTEGER NOT NULL,
+                        PRIMARY KEY(exerciseId)
+                    )
+                    """.trimIndent(),
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "gym_custom_exercises",
+                    column = "primaryMuscle",
+                    spec = "TEXT",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "gym_custom_exercises",
+                    column = "secondaryMuscles",
+                    spec = "TEXT",
+                )
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "gym_custom_exercises",
+                    column = "equipment",
+                    spec = "TEXT",
+                )
+            }
+        }
+
+        val MIGRATION_35_36 = object : Migration(35, 36) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                SqliteSchema.addColumnIfMissing(
+                    db = db,
+                    table = "gym_workout_sets",
+                    column = "skipped",
+                    spec = "INTEGER NOT NULL DEFAULT 0",
+                )
             }
         }
     }

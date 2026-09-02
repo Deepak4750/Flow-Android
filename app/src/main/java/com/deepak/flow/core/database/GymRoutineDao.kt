@@ -90,6 +90,15 @@ interface GymRoutineDao {
     @Query("DELETE FROM gym_routine_exercises WHERE dayId = :dayId")
     suspend fun deleteExercisesForDay(dayId: Long)
 
+    @Query(
+        """
+        SELECT DISTINCT TRIM(name) FROM gym_routine_exercises
+        WHERE TRIM(name) != ''
+        ORDER BY name COLLATE NOCASE ASC
+        """,
+    )
+    suspend fun getDistinctExerciseNames(): List<String>
+
     @Transaction
     suspend fun deleteRoutineCascade(routineId: Long) {
         val days = getDays(routineId)

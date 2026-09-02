@@ -2,6 +2,8 @@ package com.deepak.flow.core.database
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.deepak.flow.core.model.ContextualHints
+import com.deepak.flow.core.model.MenuTutorialStatus
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.model.UserProfile
 
@@ -33,4 +35,7 @@ data class UserProfileEntity(
     val waterActiveHoursEndMinutes: Int = 1380,
     val keepDataOnUninstall: Boolean = true,
     val activeGymRoutineId: Long? = null,
+    val menuTutorialStatus: String = MenuTutorialStatus.DEFAULT.name,
+    val routineSwipeDeleteHintShown: Boolean = ContextualHints.ROUTINE_SWIPE_DELETE_HINT_SHOWN_DEFAULT,
+    val builderDaySwipeDeleteHintShown: Boolean = ContextualHints.BUILDER_DAY_SWIPE_DELETE_HINT_SHOWN_DEFAULT,
 )

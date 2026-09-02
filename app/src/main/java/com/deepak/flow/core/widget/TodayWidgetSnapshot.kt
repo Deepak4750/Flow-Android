@@ -2,6 +2,7 @@ package com.deepak.flow.core.widget
 
 import com.deepak.flow.core.model.DailyProgress
 import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.model.activeOn
 import com.deepak.flow.core.scheduling.SchedulingEngine
 import java.time.Instant
 import java.time.LocalDate

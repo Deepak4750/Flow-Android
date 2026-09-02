@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,11 +26,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.deepak.flow.R
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowDialog
 import com.deepak.flow.app.components.FlowHairlineDivider
+import com.deepak.flow.app.components.FlowIconAction
 import com.deepak.flow.app.components.FlowMetaText
 import com.deepak.flow.app.components.FlowScreenTitle
 import com.deepak.flow.app.components.FlowSectionLabel
@@ -37,6 +41,7 @@ import com.deepak.flow.app.components.FlowSupportingText
 import com.deepak.flow.app.components.FlowSwipeDeleteRow
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowShell
+import com.deepak.flow.app.theme.FlowSizes
 import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.app.theme.FlowTextPrimary
 import com.deepak.flow.core.gym.GymLogic
@@ -199,6 +204,15 @@ private fun RoutineCatalogRow(
                 Spacer(modifier = Modifier.height(FlowSpacing.xxs))
                 FlowMetaText(routineCatalogSubtitle(item))
             }
+            FlowIconAction(
+                icon = Icons.Outlined.DeleteOutline,
+                contentDescription = stringResource(
+                    R.string.content_description_delete_routine,
+                    item.name,
+                ),
+                onClick = onDelete,
+                iconSize = FlowSizes.iconSm,
+            )
         }
     }
 }

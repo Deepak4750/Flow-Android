@@ -2,7 +2,11 @@ package com.deepak.flow.core.scheduling
 
 import com.deepak.flow.core.model.ActiveHours
 import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.model.ReminderExpirationMode
 import com.deepak.flow.core.model.Schedule
+import com.deepak.flow.core.model.effectiveExpirationMode
+import com.deepak.flow.core.model.hasOccurrencesRemaining
+import com.deepak.flow.core.model.isExpiredOn
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -21,9 +25,19 @@ class SchedulingEngine {
         if (!reminder.enabled) return null
         if (reminder.reminderTimes.isEmpty()) return null
 
+        val effectiveActiveHours = schedulingActiveHours(reminder.schedule, activeHours)
+
         val referenceZdt = referenceInstant.atZone(zoneId)
         val referenceDate = referenceZdt.toLocalDate()
-        val endDate = reminder.endDate
+
+        if (reminder.isExpiredOn(referenceDate)) return null
+        if (!reminder.hasOccurrencesRemaining()) return null
+
+        val endDate = if (reminder.effectiveExpirationMode() == ReminderExpirationMode.END_DATE) {
+            reminder.endDate
+        } else {
+            null
+        }
 
         if (endDate != null && referenceDate.isAfter(endDate)) return null
 
@@ -35,7 +49,7 @@ class SchedulingEngine {
                 reminder = reminder,
                 referenceInstant = referenceInstant,
                 zoneId = zoneId,
-                activeHours = activeHours,
+                activeHours = effectiveActiveHours,
                 intervalHours = schedule.intervalHours,
                 endDate = endDate,
             )
@@ -44,7 +58,7 @@ class SchedulingEngine {
                 reminder = reminder,
                 referenceInstant = referenceInstant,
                 zoneId = zoneId,
-                activeHours = activeHours,
+                activeHours = effectiveActiveHours,
                 schedule = schedule,
                 searchStartDate = if (referenceDate.isBefore(reminder.startDate)) reminder.startDate else referenceDate,
                 searchEndDate = searchEndDate,
@@ -179,18 +193,30 @@ class SchedulingEngine {
         if (!reminder.enabled) return false
         if (reminder.reminderTimes.isEmpty()) return false
         if (date.isBefore(reminder.startDate)) return false
-        if (reminder.endDate != null && date.isAfter(reminder.endDate)) return false
+        val endDate = if (reminder.effectiveExpirationMode() == ReminderExpirationMode.END_DATE) {
+            reminder.endDate
+        } else {
+            null
+        }
+        if (endDate != null && date.isAfter(endDate)) return false
+        if (date.isAfter(LocalDate.now(zoneId)) &&
+            reminder.effectiveExpirationMode() == ReminderExpirationMode.OCCURRENCE_LIMIT &&
+            !reminder.hasOccurrencesRemaining()
+        ) {
+            return false
+        }
 
         return when (val schedule = reminder.schedule) {
             is Schedule.EveryXHours -> true
-            else -> {
-                if (!matchesSchedule(schedule, date, reminder.startDate)) return false
-                reminder.reminderTimes.any { time ->
-                    reminder.activeHours?.isActive(time) != false
-                }
-            }
+            else -> matchesSchedule(schedule, date, reminder.startDate)
         }
     }
+
+    /** Active hours constrain scheduling only for Every few hours reminders. */
+    internal fun schedulingActiveHours(
+        schedule: Schedule,
+        activeHours: ActiveHours?,
+    ): ActiveHours? = if (schedule is Schedule.EveryXHours) activeHours else null
 
     fun isOccurrenceStillValid(
         scheduledInstant: Instant,

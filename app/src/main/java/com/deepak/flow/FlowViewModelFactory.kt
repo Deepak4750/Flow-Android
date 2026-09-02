@@ -32,6 +32,7 @@ class FlowViewModelFactory(
 class CreateReminderViewModelFactory(
     private val application: FlowApplication,
     private val editReminderId: Long? = null,
+    private val reuseFromReminderId: Long? = null,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -39,6 +40,7 @@ class CreateReminderViewModelFactory(
             return com.deepak.flow.feature.reminder.presentation.CreateReminderViewModel(
                 application = application,
                 editReminderId = editReminderId,
+                reuseFromReminderId = reuseFromReminderId,
             ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")

@@ -11,6 +11,8 @@ import com.deepak.flow.core.gym.GymLimits
 import com.deepak.flow.core.gym.GymRoutine
 import com.deepak.flow.core.gym.GymRoutineDay
 import com.deepak.flow.core.gym.GymRoutineExercise
+import com.deepak.flow.core.gym.RoutineDeleteDecision
+import com.deepak.flow.core.gym.RoutineDeleteLogic
 import com.deepak.flow.core.gym.TrackingField
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,7 +34,13 @@ data class RoutineBuilderUiState(
     val message: String? = null,
     val saved: Boolean = false,
     val leave: Boolean = false,
+    val deleted: Boolean = false,
+    val confirmDeleteRoutine: Boolean = false,
+    val deleteBlockedMessage: String? = null,
     val hasUnsavedChanges: Boolean = false,
+    val exerciseNameSuggestions: List<String> = emptyList(),
+    val exerciseSearchResults: List<com.deepak.flow.core.gym.GymExerciseSearchHit> = emptyList(),
+    val exerciseSearchQuery: String = "",
 ) {
     val isEditMode: Boolean get() = routineId > 0L
 
@@ -91,6 +99,99 @@ class RoutineBuilderViewModel(
             )
             editBaseline = RoutineBuilderSnapshot.from(fresh)
             _uiState.value = publish(fresh)
+        }
+    }
+
+    fun loadExerciseNameSuggestions() {
+        viewModelScope.launch {
+            val suggestions = repository.getExerciseNameSuggestions()
+            _uiState.update { publish(it.copy(exerciseNameSuggestions = suggestions)) }
+        }
+    }
+
+    fun onExerciseSearchQueryChange(dayKey: String, exerciseStableKey: String, query: String) {
+        onExerciseNameChange(dayKey, exerciseStableKey, query)
+        viewModelScope.launch {
+            val results = repository.searchExercises(query)
+            _uiState.update {
+                publish(
+                    it.copy(
+                        exerciseSearchQuery = query,
+                        exerciseSearchResults = results,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun onExerciseSelected(
+        dayKey: String,
+        exerciseStableKey: String,
+        canonicalExerciseId: String,
+        displayName: String,
+    ) {
+        updateExercise(dayKey, exerciseStableKey) {
+            it.copy(exerciseId = canonicalExerciseId, name = displayName)
+        }
+        _uiState.update {
+            publish(it.copy(exerciseSearchQuery = displayName, exerciseSearchResults = emptyList()))
+        }
+    }
+
+    fun onCreateCustomExercise(dayKey: String, exerciseStableKey: String, displayName: String) {
+        viewModelScope.launch {
+            val selection = repository.createCustomExercise(displayName)
+            onExerciseSelected(dayKey, exerciseStableKey, selection.exerciseId, selection.displayName)
+        }
+    }
+
+    fun browseExercises(
+        query: String,
+        muscleFilter: com.deepak.flow.core.gym.GymMuscleGroup? = null,
+        equipmentFilter: com.deepak.flow.core.gym.GymEquipment? = null,
+    ) {
+        viewModelScope.launch {
+            val results = repository.browseExercises(
+                query = query,
+                muscleFilter = muscleFilter,
+                equipmentFilter = equipmentFilter,
+            )
+            _uiState.update {
+                publish(
+                    it.copy(
+                        exerciseSearchQuery = query,
+                        exerciseSearchResults = results,
+                    ),
+                )
+            }
+        }
+    }
+
+    fun saveExerciseMetadataOverride(
+        exerciseId: String,
+        displayName: String?,
+        primaryMuscle: com.deepak.flow.core.gym.GymMuscleGroup?,
+        secondaryMuscles: List<com.deepak.flow.core.gym.GymMuscleGroup>,
+        equipment: com.deepak.flow.core.gym.GymEquipment?,
+    ) {
+        viewModelScope.launch {
+            if (com.deepak.flow.core.gym.GymExerciseIdentity.isBuiltinId(exerciseId)) {
+                repository.saveBuiltinExerciseOverride(
+                    exerciseId = exerciseId,
+                    displayName = displayName,
+                    primaryMuscle = primaryMuscle,
+                    secondaryMuscles = secondaryMuscles,
+                    equipment = equipment,
+                )
+            } else if (com.deepak.flow.core.gym.GymExerciseIdentity.isCustomId(exerciseId)) {
+                repository.saveCustomExerciseMetadata(
+                    exerciseId = exerciseId,
+                    displayName = displayName,
+                    primaryMuscle = primaryMuscle,
+                    secondaryMuscles = secondaryMuscles,
+                    equipment = equipment,
+                )
+            }
         }
     }
 
@@ -233,6 +334,83 @@ class RoutineBuilderViewModel(
 
     fun discardAndLeave() {
         _uiState.update { it.copy(leave = true, message = null, hasUnsavedChanges = false) }
+    }
+
+    fun requestDeleteRoutine() {
+        val state = _uiState.value
+        if (!state.isEditMode) return
+        viewModelScope.launch {
+            applyDeleteDecision(
+                RoutineDeleteLogic.request(
+                    routineId = state.routineId,
+                    routineName = state.name,
+                    inActiveWorkout = repository.isRoutineInActiveWorkout(state.routineId),
+                    routineMissing = false,
+                ),
+            )
+        }
+    }
+
+    fun dismissDeleteRoutine() {
+        _uiState.update { it.copy(confirmDeleteRoutine = false) }
+    }
+
+    fun confirmDeleteRoutine() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            if (!state.isEditMode || !state.confirmDeleteRoutine) return@launch
+            when (
+                val decision = RoutineDeleteLogic.confirm(
+                    routineId = state.routineId,
+                    inActiveWorkout = repository.isRoutineInActiveWorkout(state.routineId),
+                )
+            ) {
+                is RoutineDeleteDecision.Confirm -> {
+                    repository.deleteRoutine(decision.routineId)
+                    _uiState.update {
+                        it.copy(
+                            confirmDeleteRoutine = false,
+                            deleted = true,
+                            leave = false,
+                            hasUnsavedChanges = false,
+                            message = null,
+                        )
+                    }
+                }
+                RoutineDeleteDecision.Blocked -> {
+                    _uiState.update {
+                        it.copy(
+                            confirmDeleteRoutine = false,
+                            deleteBlockedMessage = RoutineDeleteLogic.BLOCKED_MESSAGE,
+                        )
+                    }
+                }
+                RoutineDeleteDecision.Ignore -> Unit
+            }
+        }
+    }
+
+    fun clearDeleteBlockedMessage() {
+        _uiState.update { it.copy(deleteBlockedMessage = null) }
+    }
+
+    private fun applyDeleteDecision(decision: RoutineDeleteDecision) {
+        when (decision) {
+            is RoutineDeleteDecision.Confirm -> {
+                _uiState.update {
+                    it.copy(
+                        confirmDeleteRoutine = true,
+                        deleteBlockedMessage = null,
+                    )
+                }
+            }
+            RoutineDeleteDecision.Blocked -> {
+                _uiState.update {
+                    it.copy(deleteBlockedMessage = RoutineDeleteLogic.BLOCKED_MESSAGE)
+                }
+            }
+            RoutineDeleteDecision.Ignore -> Unit
+        }
     }
 
     fun addExercise(dayKey: String) {

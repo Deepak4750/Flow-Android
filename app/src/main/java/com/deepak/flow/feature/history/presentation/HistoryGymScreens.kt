@@ -265,16 +265,21 @@ fun HistoryGymWorkoutScreen(
                         },
                     )
                 } else {
-                    Text(
-                        text = uiState.titleLabel,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = FlowTextPrimary,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(role = Role.Button) {
-                                viewModel.startEditingTitle()
-                            },
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = uiState.titleLabel,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = FlowTextPrimary,
+                            modifier = Modifier
+                                .clickable(role = Role.Button) {
+                                    viewModel.startEditingTitle()
+                                },
+                        )
+                        FlowMetaText(
+                            text = "Tap to rename",
+                            color = FlowTextTertiary,
+                        )
+                    }
                 }
                 if (uiState.workoutId != 0L) {
                     IconButton(onClick = viewModel::toggleStarred) {
@@ -301,6 +306,10 @@ fun HistoryGymWorkoutScreen(
                 FlowSupportingText("Workout not found.")
             } else {
                 FlowSupportingText("${uiState.dateLabel} · ${uiState.durationLabel}")
+                if (!uiState.canEdit) {
+                    Spacer(modifier = Modifier.height(FlowSpacing.xs))
+                    FlowSupportingText("Editable for 24 hours.")
+                }
                 Spacer(modifier = Modifier.height(FlowSpacing.xl))
                 uiState.exercises.forEachIndexed { index, exercise ->
                     HistoryGymExerciseBlock(

@@ -36,6 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.deepak.flow.R
+import com.deepak.flow.app.components.FeatureOffState
 import com.deepak.flow.app.components.FlowAccentDot
 import com.deepak.flow.app.components.FlowChip
 import com.deepak.flow.app.components.FlowDialog
@@ -46,6 +47,7 @@ import com.deepak.flow.app.components.FlowMetaText
 import com.deepak.flow.app.components.FlowReminderCard
 import com.deepak.flow.app.components.FlowScreenHeading
 import com.deepak.flow.app.components.FlowScreenTitle
+import com.deepak.flow.app.components.FlowSupportingText
 import com.deepak.flow.app.components.FlowSwitch
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowShell
@@ -137,6 +139,7 @@ fun RemindersScreen(
             onToggleEnabled = viewModel::toggleReminderEnabled,
             onRequestDelete = { pendingDelete = it },
             onToggleTodayCompletion = viewModel::toggleTodayCompletion,
+            onTurnTasksBackOn = { onRemindersEnabledChange(true) },
         )
     }
 }
@@ -151,6 +154,7 @@ private fun ColumnScope.RemindersContent(
     onToggleEnabled: (Long, Boolean) -> Unit,
     onRequestDelete: (Reminder) -> Unit,
     onToggleTodayCompletion: (Long, Boolean) -> Unit,
+    onTurnTasksBackOn: () -> Unit,
 ) {
     var categoryFilter by remember { mutableStateOf<RemindersCategoryFilter>(RemindersCategoryFilter.All) }
     val schedulingEngine = remember { SchedulingEngine() }
@@ -180,7 +184,9 @@ private fun ColumnScope.RemindersContent(
     if (!remindersEnabled) {
         FeatureOffState(
             title = "Tasks are off.",
-            message = "Turn it on from the menu when you want them back.",
+            message = "Turn it on when you want them back.",
+            actionLabel = "Turn Tasks back on",
+            onTurnBackOn = onTurnTasksBackOn,
             modifier = Modifier.weight(1f),
         )
     } else {
@@ -214,20 +220,27 @@ private fun ColumnScope.RemindersContent(
             onSelect = { categoryFilter = it },
         )
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
-        ReminderList(
-            reminders = filteredReminders,
-            nextReminderId = next?.id,
-            timeFormatter = timeFormatter,
-            completedTodayIds = uiState.completedTodayIds,
-            schedulingEngine = schedulingEngine,
-            today = today,
-            zoneId = zoneId,
-            onToggleEnabled = onToggleEnabled,
-            onRequestDelete = onRequestDelete,
-            onEdit = onEditReminder,
-            onToggleTodayCompletion = onToggleTodayCompletion,
-            modifier = Modifier.weight(1f),
-        )
+        if (filteredReminders.isEmpty()) {
+            FilterEmptyState(
+                filter = categoryFilter,
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            ReminderList(
+                reminders = filteredReminders,
+                nextReminderId = next?.id,
+                timeFormatter = timeFormatter,
+                completedTodayIds = uiState.completedTodayIds,
+                schedulingEngine = schedulingEngine,
+                today = today,
+                zoneId = zoneId,
+                onToggleEnabled = onToggleEnabled,
+                onRequestDelete = onRequestDelete,
+                onEdit = onEditReminder,
+                onToggleTodayCompletion = onToggleTodayCompletion,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
     }
 }
@@ -276,6 +289,26 @@ private fun CategoryFilterRow(
 }
 
 @Composable
+private fun FilterEmptyState(
+    filter: RemindersCategoryFilter,
+    modifier: Modifier = Modifier,
+) {
+    val label = when (filter) {
+        RemindersCategoryFilter.All -> "tasks"
+        is RemindersCategoryFilter.BuiltIn -> filter.category.displayName.lowercase()
+        is RemindersCategoryFilter.Named -> filter.name
+    }
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        FlowSupportingText("No $label tasks yet.")
+        Spacer(modifier = Modifier.height(FlowSpacing.xs))
+        FlowSupportingText("Try another filter, or tap + to add one.")
+    }
+}
+
+@Composable
 private fun EmptyState(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier.fillMaxSize(),
@@ -290,32 +323,6 @@ private fun EmptyState(modifier: Modifier = Modifier) {
             Spacer(modifier = Modifier.height(FlowSpacing.xxs))
             Text(
                 text = "Tap + to add your first task.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = FlowTextSecondary,
-            )
-        }
-    }
-}
-
-@Composable
-private fun FeatureOffState(
-    title: String,
-    message: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = FlowTextPrimary,
-            )
-            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-            Text(
-                text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = FlowTextSecondary,
             )
@@ -443,6 +450,11 @@ private fun ReminderRowContent(
             }
         }
         Column(horizontalAlignment = Alignment.End) {
+            FlowMetaText(
+                text = "Active",
+                color = if (reminder.enabled) FlowTextTertiary else FlowTextDisabled,
+            )
+            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
             FlowSwitch(
                 checked = reminder.enabled,
                 onCheckedChange = onToggleEnabled,

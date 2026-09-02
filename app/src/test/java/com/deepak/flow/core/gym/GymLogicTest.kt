@@ -149,6 +149,24 @@ class GymLogicTest {
     }
 
     @Test
+    fun formatSetSummary_skippedSet() {
+        val skipped = GymWorkoutSet(
+            workoutExerciseId = 1L,
+            setNumber = 3,
+            saved = true,
+            skipped = true,
+        )
+        assertEquals(
+            "Skipped",
+            GymLogic.formatSetSummary(
+                skipped,
+                setOf(TrackingField.WEIGHT, TrackingField.REPS),
+                WeightUnit.KG,
+            ),
+        )
+    }
+
+    @Test
     fun noteLimit_clampedTo200() {
         val long = "a".repeat(250)
         assertEquals(200, GymLimits.clampNote(long).length)
@@ -229,29 +247,11 @@ class GymLogicTest {
     }
 
     @Test
-    fun exerciseElapsed_andNotificationBody_useTimestamps() {
+    fun exerciseElapsed_usesTimestamps() {
         val workoutStart = 1_000_000L
         val exerciseStart = workoutStart + 60_000L
         val now = exerciseStart + (8 * 60 + 42) * 1000L
         assertEquals("08:42", GymLogic.formatExerciseElapsed(exerciseStart, now))
-        assertEquals(
-            "Chest Press\nWorkout 00:09:42\nExercise 08:42",
-            GymLogic.activeWorkoutNotificationBody(
-                exerciseName = "Chest Press",
-                workoutStartedAtEpochMilli = workoutStart,
-                exerciseStartedAtEpochMilli = exerciseStart,
-                nowEpochMilli = now,
-            ),
-        )
-        assertEquals(
-            "Workout 00:01:00",
-            GymLogic.activeWorkoutNotificationBody(
-                exerciseName = null,
-                workoutStartedAtEpochMilli = workoutStart,
-                exerciseStartedAtEpochMilli = null,
-                nowEpochMilli = workoutStart + 60_000L,
-            ),
-        )
     }
 
     @Test
@@ -261,6 +261,29 @@ class GymLogicTest {
         assertEquals(2, links.size)
         assertTrue(links[0].url.startsWith("https://"))
         assertTrue(links[1].url.startsWith("https://"))
+    }
+
+    @Test
+    fun allSelectedFieldsFilled_allowsZeroWeight() {
+        val fields = setOf(TrackingField.WEIGHT, TrackingField.REPS)
+        assertTrue(
+            GymLogic.allSelectedFieldsFilled(
+                fields,
+                GymSetMeasurements(weight = 0.0, reps = 10),
+            ),
+        )
+        assertFalse(
+            GymLogic.allSelectedFieldsFilled(
+                fields,
+                GymSetMeasurements(weight = -2.5, reps = 10),
+            ),
+        )
+        assertFalse(
+            GymLogic.allSelectedFieldsFilled(
+                fields,
+                GymSetMeasurements(reps = 10),
+            ),
+        )
     }
 
     @Test
@@ -290,6 +313,7 @@ class GymLogicTest {
     fun weightAndRepsStepping() {
         assertEquals("10.5", GymLogic.stepWeightValue("10", up = true))
         assertEquals("7.5", GymLogic.stepWeightValue("8", up = false))
+        assertEquals("0", GymLogic.stepWeightValue("0.5", up = false))
         assertEquals("9", GymLogic.stepWholeValue("8", up = true))
         assertEquals("1", GymLogic.stepWholeValue("1", up = false))
     }
@@ -397,10 +421,11 @@ class GymLogicTest {
     }
 
     @Test
-    fun matchPreviousExercise_prefersStableKeyThenRoutineExerciseIdThenName() {
+    fun matchPreviousExercise_prefersExerciseIdThenStableKeyThenRoutineExerciseIdThenName() {
         val previous = listOf(
             GymWorkoutExercise(
                 id = 1,
+                exerciseId = "builtin:barbell_bench_press",
                 name = "Bench Press",
                 sortOrder = 0,
                 routineExerciseId = 10L,
@@ -408,6 +433,7 @@ class GymLogicTest {
             ),
             GymWorkoutExercise(
                 id = 2,
+                exerciseId = "builtin:barbell_squat",
                 name = "Squat",
                 sortOrder = 1,
                 routineExerciseId = 11L,
@@ -418,6 +444,17 @@ class GymLogicTest {
             1L,
             GymLogic.matchPreviousExercise(
                 previous,
+                exerciseId = "builtin:barbell_bench_press",
+                routineExerciseId = 99L,
+                exerciseStableKey = "other-key",
+                name = "Other",
+            )?.id,
+        )
+        assertEquals(
+            1L,
+            GymLogic.matchPreviousExercise(
+                previous,
+                exerciseId = null,
                 routineExerciseId = 99L,
                 exerciseStableKey = "key-a",
                 name = "Other",
@@ -425,11 +462,23 @@ class GymLogicTest {
         )
         assertEquals(
             1L,
-            GymLogic.matchPreviousExercise(previous, routineExerciseId = 10L, exerciseStableKey = null, name = "Other")?.id,
+            GymLogic.matchPreviousExercise(
+                previous,
+                exerciseId = null,
+                routineExerciseId = 10L,
+                exerciseStableKey = null,
+                name = "Other",
+            )?.id,
         )
         assertEquals(
             2L,
-            GymLogic.matchPreviousExercise(previous, routineExerciseId = null, exerciseStableKey = null, name = "squat")?.id,
+            GymLogic.matchPreviousExercise(
+                previous,
+                exerciseId = null,
+                routineExerciseId = null,
+                exerciseStableKey = null,
+                name = "squat",
+            )?.id,
         )
     }
 

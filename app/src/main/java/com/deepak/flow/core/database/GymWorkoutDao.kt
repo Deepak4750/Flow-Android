@@ -181,6 +181,35 @@ interface GymWorkoutDao {
     )
     suspend fun minCompletedEndedAt(status: String): Long?
 
+    @Query(
+        """
+        SELECT DISTINCT TRIM(exerciseName) FROM gym_workout_exercises
+        WHERE TRIM(exerciseName) != ''
+        ORDER BY exerciseName COLLATE NOCASE ASC
+        """,
+    )
+    suspend fun getDistinctExerciseNames(): List<String>
+
+    @Query(
+        """
+        SELECT e.* FROM gym_workout_exercises e
+        INNER JOIN gym_workouts w ON w.id = e.workoutId
+        WHERE w.status = :status
+          AND w.completed = 1
+          AND w.id != :excludeWorkoutId
+          AND e.exerciseId = :exerciseId
+          AND TRIM(e.exerciseId) != ''
+          AND e.skipped = 0
+        ORDER BY w.endedAtEpochMilli DESC, e.id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun getLatestCompletedExerciseByCanonicalId(
+        status: String,
+        exerciseId: String,
+        excludeWorkoutId: Long,
+    ): GymWorkoutExerciseEntity?
+
     @Transaction
     suspend fun deleteWorkoutCascade(workoutId: Long) {
         deleteSetsForWorkout(workoutId)

@@ -3,11 +3,14 @@ package com.deepak.flow.core.backup
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.os.Environment
 import android.os.Process
 import android.provider.MediaStore
 import com.deepak.flow.core.database.FlowDatabase
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * A copy of Flow's database in the phone's Documents folder, so tasks can
@@ -41,6 +44,7 @@ object KeepDataStore {
         runCatching {
             val dbFile = context.getDatabasePath(DATABASE_NAME)
             if (dbFile.exists() && dbFile.length() > 0L) return
+            indexDocumentsKeepFilesIfPresent(context)
             val meta = readBackupMeta(context)
             if (meta != null && !shouldRestoreBackup(meta.ownerUserId, currentAndroidUserId())) return
             val bytes = readBackup(context) ?: return
@@ -168,4 +172,31 @@ object KeepDataStore {
     }
 
     private fun collection() = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+
+    private fun documentsKeepFile(): File = File(
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+        "Flow/$DISPLAY_NAME",
+    )
+
+    private fun documentsKeepMetaFile(): File = File(
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+        "Flow/$META_DISPLAY_NAME",
+    )
+
+    internal fun indexDocumentsKeepFilesIfPresent(context: Context) {
+        val keepFile = documentsKeepFile()
+        if (!keepFile.isFile || keepFile.length() <= 0L) return
+        val paths = buildList {
+            add(keepFile.absolutePath)
+            val metaFile = documentsKeepMetaFile()
+            if (metaFile.isFile && metaFile.length() > 0L) {
+                add(metaFile.absolutePath)
+            }
+        }.toTypedArray()
+        val latch = CountDownLatch(1)
+        MediaScannerConnection.scanFile(context, paths, null) { _, _ ->
+            latch.countDown()
+        }
+        latch.await(5, TimeUnit.SECONDS)
+    }
 }

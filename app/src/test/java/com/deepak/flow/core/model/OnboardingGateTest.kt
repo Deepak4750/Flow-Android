@@ -8,7 +8,7 @@ import org.junit.Test
 class OnboardingGateTest {
 
     @Test
-    fun unknownProfileDoesNotShowTutorial() {
+    fun unknownProfileShowsLoading() {
         assertEquals(OnboardingGate.Loading, onboardingGate(profileLoaded = false, profile = null))
         assertEquals(
             OnboardingGate.Loading,
@@ -20,10 +20,10 @@ class OnboardingGateTest {
     }
 
     @Test
-    fun newUserSeesTutorial() {
-        assertEquals(OnboardingGate.ShowTutorial, onboardingGate(profileLoaded = true, profile = null))
+    fun newUserSeesOnboarding() {
+        assertEquals(OnboardingGate.ShowOnboarding, onboardingGate(profileLoaded = true, profile = null))
         assertEquals(
-            OnboardingGate.ShowTutorial,
+            OnboardingGate.ShowOnboarding,
             onboardingGate(
                 profileLoaded = true,
                 profile = UserProfile(onboardingCompleted = false),
@@ -43,7 +43,7 @@ class OnboardingGateTest {
     }
 
     @Test
-    fun restartAndOtaDoNotReopenTutorial() {
+    fun restartAndOtaDoNotReopenOnboarding() {
         val existing = UserProfile(onboardingCompleted = true, remindersEnabled = true)
         assertEquals(OnboardingGate.Ready, onboardingGate(true, existing))
         assertTrue(existing.onboardingCompleted)

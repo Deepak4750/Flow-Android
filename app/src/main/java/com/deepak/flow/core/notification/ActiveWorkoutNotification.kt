@@ -7,4 +7,6 @@ internal const val ACTIVE_WORKOUT_NOTIFICATION_GUARD_ID = 0x6C6F7703L
 
 internal object ActiveWorkoutNotificationIntents {
     const val ACTION_RESTORE = "com.deepak.flow.action.RESTORE_ACTIVE_WORKOUT"
+    const val ACTION_SKIP_REST = "com.deepak.flow.action.SKIP_ACTIVE_WORKOUT_REST"
+    const val EXTRA_WORKOUT_ID = "extra_active_workout_id"
 }

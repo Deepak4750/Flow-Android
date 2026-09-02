@@ -4,8 +4,13 @@ import com.deepak.flow.core.database.ReminderDao
 import com.deepak.flow.core.database.ReminderCompletionDao
 import com.deepak.flow.core.database.ReminderDayCompletionEntity
 import com.deepak.flow.core.database.ReminderEntity
+import com.deepak.flow.core.database.ReminderOccurrenceDao
+import com.deepak.flow.core.database.ReminderOccurrenceDeliveryEntity
 import com.deepak.flow.core.model.ActiveHours
 import com.deepak.flow.core.model.Reminder
+import com.deepak.flow.core.model.ReminderExpirationMode
+import com.deepak.flow.core.model.effectiveExpirationMode
+import com.deepak.flow.core.model.isExpiredOn
 import com.deepak.flow.core.model.Schedule
 import com.deepak.flow.core.notification.NotificationScheduler
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +22,7 @@ import java.time.LocalDate
 class ReminderRepositoryImpl(
     private val dao: ReminderDao,
     private val completionDao: ReminderCompletionDao,
+    private val occurrenceDao: ReminderOccurrenceDao,
     private val notificationScheduler: NotificationScheduler,
     private val onDataChanged: () -> Unit = {},
     private val json: Json = Json {
@@ -35,7 +41,7 @@ class ReminderRepositoryImpl(
     override suspend fun insertReminder(reminder: Reminder): Long {
         val id = dao.insert(reminder.toEntity(json))
         val saved = reminder.copy(id = id)
-        if (saved.enabled) {
+        if (saved.enabled && !saved.isExpiredOn(LocalDate.now())) {
             notificationScheduler.scheduleNextOccurrence(saved)
         }
         onDataChanged()
@@ -45,7 +51,7 @@ class ReminderRepositoryImpl(
     override suspend fun updateReminder(reminder: Reminder) {
         dao.update(reminder.toEntity(json))
         notificationScheduler.cancelReminder(reminder.id)
-        if (reminder.enabled) {
+        if (reminder.enabled && !reminder.isExpiredOn(LocalDate.now())) {
             notificationScheduler.scheduleNextOccurrence(reminder)
         }
         onDataChanged()
@@ -59,8 +65,6 @@ class ReminderRepositoryImpl(
     }
 
     override suspend fun deleteAllReminders() {
-        // Alarms are keyed by reminder id, so every pending one must be cancelled
-        // before the rows disappear.
         cancelAllScheduledReminders()
         completionDao.deleteAll()
         dao.deleteAll()
@@ -71,7 +75,7 @@ class ReminderRepositoryImpl(
         val existing = dao.getById(id) ?: return
         val updated = existing.copy(enabled = enabled)
         dao.update(updated)
-        if (enabled) {
+        if (enabled && !updated.toDomain(json).isExpiredOn(LocalDate.now())) {
             notificationScheduler.scheduleNextOccurrence(updated.toDomain(json))
         } else {
             notificationScheduler.cancelReminder(id)
@@ -80,12 +84,13 @@ class ReminderRepositoryImpl(
     }
 
     override suspend fun rescheduleAllEnabledReminders() {
-        // Cancel every known alarm before rebuilding, so calling this on an already
-        // scheduled process (a timezone change, say) cannot leave a stale alarm behind
-        // for a reminder that is now disabled or past its end date.
         cancelAllScheduledReminders()
+        val today = LocalDate.now()
         dao.getEnabled().forEach { entity ->
-            notificationScheduler.scheduleNextOccurrence(entity.toDomain(json))
+            val reminder = entity.toDomain(json)
+            if (!reminder.isExpiredOn(today)) {
+                notificationScheduler.scheduleNextOccurrence(reminder)
+            }
         }
     }
 
@@ -110,6 +115,29 @@ class ReminderRepositoryImpl(
         }
         onDataChanged()
     }
+
+    override suspend fun recordOccurrenceDelivery(
+        reminderId: Long,
+        scheduledAtEpochMilli: Long,
+    ): Reminder? {
+        val rowId = occurrenceDao.insert(
+            ReminderOccurrenceDeliveryEntity(
+                reminderId = reminderId,
+                scheduledAtEpochMilli = scheduledAtEpochMilli,
+            ),
+        )
+        if (rowId == -1L) return null
+
+        val entity = dao.getById(reminderId) ?: return null
+        val updatedEntity = entity.copy(occurrencesDelivered = entity.occurrencesDelivered + 1)
+        dao.update(updatedEntity)
+        val reminder = updatedEntity.toDomain(json)
+        if (reminder.isExpiredOn(LocalDate.now())) {
+            notificationScheduler.cancelReminder(reminderId)
+        }
+        onDataChanged()
+        return reminder
+    }
 }
 
 private fun ReminderEntity.toDomain(json: Json): Reminder = Reminder(
@@ -118,9 +146,17 @@ private fun ReminderEntity.toDomain(json: Json): Reminder = Reminder(
     category = category,
     customCategoryName = customCategoryName,
     schedule = json.decodeFromString(Schedule.serializer(), scheduleJson),
-    reminderTimes = json.decodeFromString(ListSerializer(com.deepak.flow.core.model.LocalTimeSerializer), reminderTimesJson),
+    reminderTimes = json.decodeFromString(
+        ListSerializer(com.deepak.flow.core.model.LocalTimeSerializer),
+        reminderTimesJson,
+    ),
     startDate = LocalDate.ofEpochDay(startDateEpochDay),
+    expirationMode = runCatching {
+        ReminderExpirationMode.valueOf(expirationMode)
+    }.getOrDefault(ReminderExpirationMode.NONE),
     endDate = endDateEpochDay?.let { LocalDate.ofEpochDay(it) },
+    occurrenceLimit = occurrenceLimit,
+    occurrencesDelivered = occurrencesDelivered,
     enabled = enabled,
     activeHours = activeHoursJson?.let { json.decodeFromString(ActiveHours.serializer(), it) },
     reason = reason,
@@ -128,18 +164,27 @@ private fun ReminderEntity.toDomain(json: Json): Reminder = Reminder(
     accentColorIndex = accentColorIndex,
 )
 
-private fun Reminder.toEntity(json: Json): ReminderEntity = ReminderEntity(
-    id = id,
-    title = title,
-    category = category,
-    customCategoryName = customCategoryName,
-    scheduleJson = json.encodeToString(Schedule.serializer(), schedule),
-    reminderTimesJson = json.encodeToString(ListSerializer(com.deepak.flow.core.model.LocalTimeSerializer), reminderTimes),
-    startDateEpochDay = startDate.toEpochDay(),
-    endDateEpochDay = endDate?.toEpochDay(),
-    enabled = enabled,
-    activeHoursJson = activeHours?.let { json.encodeToString(ActiveHours.serializer(), it) },
-    reason = reason,
-    note = note,
-    accentColorIndex = accentColorIndex,
-)
+private fun Reminder.toEntity(json: Json): ReminderEntity {
+    val mode = effectiveExpirationMode()
+    return ReminderEntity(
+        id = id,
+        title = title,
+        category = category,
+        customCategoryName = customCategoryName,
+        scheduleJson = json.encodeToString(Schedule.serializer(), schedule),
+        reminderTimesJson = json.encodeToString(
+            ListSerializer(com.deepak.flow.core.model.LocalTimeSerializer),
+            reminderTimes,
+        ),
+        startDateEpochDay = startDate.toEpochDay(),
+        expirationMode = mode.name,
+        endDateEpochDay = if (mode == ReminderExpirationMode.END_DATE) endDate?.toEpochDay() else null,
+        occurrenceLimit = if (mode == ReminderExpirationMode.OCCURRENCE_LIMIT) occurrenceLimit else null,
+        occurrencesDelivered = occurrencesDelivered,
+        enabled = enabled,
+        activeHoursJson = activeHours?.let { json.encodeToString(ActiveHours.serializer(), it) },
+        reason = reason,
+        note = note,
+        accentColorIndex = accentColorIndex,
+    )
+}

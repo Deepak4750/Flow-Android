@@ -33,7 +33,9 @@ import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.model.onboardingGate
 import com.deepak.flow.core.update.AppUpdateViewModel
 import com.deepak.flow.core.widget.WidgetLaunch
+import com.deepak.flow.core.widget.reminderIdOrNull
 import com.deepak.flow.core.widget.widgetDestinationOrNull
+import com.deepak.flow.feature.gym.presentation.ExerciseLibraryScreen
 import com.deepak.flow.feature.gym.presentation.FreeWorkoutScreen
 import com.deepak.flow.feature.gym.presentation.FreeWorkoutViewModel
 import com.deepak.flow.feature.gym.presentation.FreeWorkoutViewModelFactory
@@ -52,6 +54,9 @@ import com.deepak.flow.feature.home.presentation.HomeViewModel
 import com.deepak.flow.feature.history.presentation.HistoryDayScreen
 import com.deepak.flow.feature.history.presentation.HistoryDayViewModel
 import com.deepak.flow.feature.history.presentation.HistoryDayViewModelFactory
+import com.deepak.flow.feature.history.presentation.HistoryExpiredReminderScreen
+import com.deepak.flow.feature.history.presentation.HistoryExpiredReminderViewModel
+import com.deepak.flow.feature.history.presentation.HistoryExpiredReminderViewModelFactory
 import com.deepak.flow.feature.history.presentation.HistoryGymDayScreen
 import com.deepak.flow.feature.history.presentation.HistoryGymDayViewModel
 import com.deepak.flow.feature.history.presentation.HistoryGymEditExerciseScreen
@@ -102,7 +107,7 @@ fun FlowApp(
                         .background(MaterialTheme.colorScheme.background),
                 )
             }
-            OnboardingGate.ShowTutorial -> {
+            OnboardingGate.ShowOnboarding -> {
                 val viewModel: OnboardingViewModel = viewModel(factory = factory)
                 OnboardingScreen(
                     viewModel = viewModel,
@@ -133,6 +138,9 @@ fun FlowApp(
                     WidgetLaunch.DEST_REMINDERS -> navController.navigateFromDrawer(FlowDrawerDestination.REMINDERS)
                     WidgetLaunch.DEST_GYM_FREE_WORKOUT -> navController.navigateToActiveWorkout(GymWorkoutType.FREE)
                     WidgetLaunch.DEST_GYM_ROUTINE_WORKOUT -> navController.navigateToActiveWorkout(GymWorkoutType.ROUTINE)
+                }
+                launchIntent?.reminderIdOrNull()?.let { reminderId ->
+                    navController.navigate(FlowRoute.EditReminder(reminderId = reminderId))
                 }
                 if (launchIntent != null) {
                     onLaunchIntentConsumed()
@@ -171,6 +179,9 @@ fun FlowApp(
                         onAddWaterMl = featureViewModel::addWaterMl,
                         onOpenWater = { onDrawerDestination(FlowDrawerDestination.WATER) },
                         onOpenGymRoutine = { navController.navigate(FlowRoute.GymRoutine) },
+                        onStartGymWorkout = {
+                            navController.navigateToActiveWorkout(GymWorkoutType.ROUTINE)
+                        },
                     )
                 }
                 composable<FlowRoute.Reminders> {
@@ -239,6 +250,7 @@ fun FlowApp(
                         onDestinationClick = onDrawerDestination,
                         onRoutine = { navController.navigate(FlowRoute.GymRoutine) },
                         onFreeWorkout = { navController.navigate(FlowRoute.GymFreeWorkout) },
+                        onExerciseLibrary = { navController.navigate(FlowRoute.GymExerciseLibrary) },
                         onContinueWorkout = { type ->
                             when (type) {
                                 GymWorkoutType.ROUTINE ->
@@ -247,6 +259,19 @@ fun FlowApp(
                                     navController.navigate(FlowRoute.GymFreeWorkout)
                             }
                         },
+                    )
+                }
+                composable<FlowRoute.GymExerciseLibrary> {
+                    ExerciseLibraryScreen(
+                        userName = featureState.profileName,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onGymEnabledChange = featureViewModel::setGymEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onBack = { navController.popBackStack() },
                     )
                 }
                 composable<FlowRoute.GymRoutine> {
@@ -264,6 +289,9 @@ fun FlowApp(
                         onDestinationClick = onDrawerDestination,
                         onBack = { navController.popBackStack() },
                         onOpenRoutines = { navController.navigate(FlowRoute.GymRoutineCatalog) },
+                        onNewRoutine = {
+                            navController.navigate(FlowRoute.GymRoutineBuilder(routineId = 0L))
+                        },
                         onEditRoutine = { routineId ->
                             navController.navigate(FlowRoute.GymRoutineBuilder(routineId = routineId))
                         },
@@ -313,6 +341,25 @@ fun FlowApp(
                         onGymEnabledChange = featureViewModel::setGymEnabled,
                         onDestinationClick = onDrawerDestination,
                         onLeave = { navController.popBackStack() },
+                        onDeleted = {
+                            // Always land on the catalog. Do not popBackStack to a
+                            // catalog that may sit above GymRoutine, and do not stay
+                            // on the editor after the routine is gone.
+                            val reachedGym = navController.popBackStack(
+                                FlowRoute.Gym,
+                                inclusive = false,
+                            )
+                            if (reachedGym) {
+                                navController.navigate(FlowRoute.GymRoutineCatalog) {
+                                    launchSingleTop = true
+                                }
+                            } else {
+                                navController.navigate(FlowRoute.GymRoutineCatalog) {
+                                    popUpTo(FlowRoute.Home) { inclusive = false }
+                                    launchSingleTop = true
+                                }
+                            }
+                        },
                     )
                 }
                 composable<FlowRoute.GymFreeWorkout> {
@@ -374,6 +421,49 @@ fun FlowApp(
                         onDayClick = { dateEpochDay ->
                             navController.navigate(FlowRoute.HistoryDay(dateEpochDay))
                         },
+                        onExpiredTaskClick = { reminderId ->
+                            navController.navigate(FlowRoute.HistoryExpiredReminder(reminderId))
+                        },
+                    )
+                }
+                composable<FlowRoute.HistoryExpiredReminder> { backStackEntry ->
+                    val route = backStackEntry.toRoute<FlowRoute.HistoryExpiredReminder>()
+                    val expiredFactory = remember(route.reminderId) {
+                        HistoryExpiredReminderViewModelFactory(app, route.reminderId)
+                    }
+                    val expiredViewModel: HistoryExpiredReminderViewModel = viewModel(
+                        factory = expiredFactory,
+                        key = "history-expired-${route.reminderId}",
+                    )
+                    HistoryExpiredReminderScreen(
+                        viewModel = expiredViewModel,
+                        userName = featureState.profileName,
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onGymEnabledChange = featureViewModel::setGymEnabled,
+                        onDestinationClick = onDrawerDestination,
+                        onBack = { navController.popBackStack() },
+                        onUseAgain = {
+                            navController.navigate(FlowRoute.ReuseReminder(route.reminderId))
+                        },
+                    )
+                }
+                composable<FlowRoute.ReuseReminder> { backStackEntry ->
+                    val route = backStackEntry.toRoute<FlowRoute.ReuseReminder>()
+                    val viewModel: CreateReminderViewModel = viewModel(
+                        factory = CreateReminderViewModelFactory(
+                            app,
+                            reuseFromReminderId = route.reminderId,
+                        ),
+                        key = "reuse-${route.reminderId}",
+                    )
+                    CreateReminderScreen(
+                        viewModel = viewModel,
+                        onBack = { navController.popBackStack() },
+                        onSaved = { navController.popBackStack() },
                     )
                 }
                 composable<FlowRoute.HistoryDay> { backStackEntry ->
@@ -548,6 +638,12 @@ fun FlowApp(
                         viewModel = viewModel,
                         updateViewModel = updateViewModel,
                         onBack = { navController.popBackStack() },
+                        remindersEnabled = remindersEnabled,
+                        waterEnabled = waterEnabled,
+                        gymEnabled = gymEnabled,
+                        onRemindersEnabledChange = featureViewModel::setRemindersEnabled,
+                        onWaterEnabledChange = featureViewModel::setWaterEnabled,
+                        onGymEnabledChange = featureViewModel::setGymEnabled,
                     )
                 }
                 composable<FlowRoute.About> {

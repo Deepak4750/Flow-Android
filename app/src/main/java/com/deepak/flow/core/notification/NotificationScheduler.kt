@@ -5,7 +5,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.deepak.flow.core.model.isExpiredOn
 import com.deepak.flow.core.model.Reminder
+import java.time.LocalDate
 import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.model.WaterReminderSettings
 import com.deepak.flow.core.model.waterActiveHoursOrNull
@@ -24,6 +26,7 @@ class NotificationScheduler(
 
     fun scheduleNextOccurrence(reminder: Reminder) {
         if (!reminder.enabled) return
+        if (reminder.isExpiredOn(java.time.LocalDate.now(zoneId))) return
 
         val next = schedulingEngine.calculateNextOccurrence(
             reminder = reminder,
@@ -123,6 +126,36 @@ class NotificationScheduler(
         pendingIntent.cancel()
     }
 
+    fun scheduleGymRest(request: GymRestAlarmRequest) {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
+            addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+            putExtra(AlarmReceiver.EXTRA_IS_GYM_REST, true)
+            putExtra(AlarmReceiver.EXTRA_WORKOUT_ID, request.workoutId)
+            putExtra(AlarmReceiver.EXTRA_REST_ENDS_AT, request.restEndsAtEpochMilli)
+            putExtra(AlarmReceiver.EXTRA_EXERCISE_NAME, request.exerciseName)
+            putExtra(AlarmReceiver.EXTRA_GYM_DESTINATION, request.destination)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            GYM_REST_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        scheduleExactOrFallback(request.restEndsAtEpochMilli, pendingIntent)
+    }
+
+    fun cancelGymRest() {
+        val intent = Intent(context, AlarmReceiver::class.java)
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            GYM_REST_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
     private fun snoozeRequestCode(reminderId: Long): Int =
         (reminderId + 1_000_000L).toInt()
 
@@ -168,5 +201,6 @@ class NotificationScheduler(
 
     companion object {
         private const val WATER_REQUEST_CODE = 0x6C6F7701
+        private const val GYM_REST_REQUEST_CODE = 0x6C6F7730
     }
 }

@@ -27,6 +27,11 @@ class UserProfileTest {
     }
 
     @Test
+    fun menuTutorialDefaultsCompletedForLegacyStorage() {
+        assertEquals(MenuTutorialStatus.COMPLETED, UserProfile().menuTutorialStatus)
+    }
+
+    @Test
     fun waterRemindersStayOffUntilTurnedOn() {
         assertFalse(UserProfile().waterRemindersEnabled)
         assertFalse(

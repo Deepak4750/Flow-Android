@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Display-only beta counter. See gradle.properties flowBetaIteration.
+val flowBetaIteration =
+    (project.findProperty("flowBetaIteration") as String?)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+
 android {
     namespace = "com.deepak.flow"
     compileSdk = 37
@@ -15,8 +19,9 @@ android {
         targetSdk = 37
         // Sideloaded APKs only update in place - and keep reminders - when this
         // number is higher than the installed build. Bump it for every APK you share.
-        versionCode = 180
+        versionCode = 216
         versionName = "1.3.3"
+        buildConfigField("int", "FLOW_BETA_ITERATION", flowBetaIteration.toString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -73,6 +78,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

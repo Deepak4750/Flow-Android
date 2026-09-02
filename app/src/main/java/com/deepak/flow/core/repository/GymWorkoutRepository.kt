@@ -1,5 +1,8 @@
 package com.deepak.flow.core.repository
 
+import com.deepak.flow.core.gym.GymExerciseSearchHit
+import com.deepak.flow.core.gym.GymExerciseSelection
+import com.deepak.flow.core.gym.GymLibraryExercise
 import com.deepak.flow.core.gym.GymRoutine
 import com.deepak.flow.core.gym.GymSetMeasurements
 import com.deepak.flow.core.gym.GymWorkoutSession
@@ -52,6 +55,7 @@ interface GymWorkoutRepository {
         plannedSetCount: Int = 0,
         routineExerciseId: Long? = null,
         exerciseStableKey: String? = null,
+        canonicalExerciseId: String = "",
     ): Long
 
     suspend fun updateExercise(
@@ -59,9 +63,17 @@ interface GymWorkoutRepository {
         name: String,
         trackingFields: Set<TrackingField>,
         note: String,
+        canonicalExerciseId: String = "",
     )
 
     suspend fun setExerciseSkipped(exerciseId: Long, skipped: Boolean)
+
+    /** Persists skipped placeholders for every unfinished planned set slot. */
+    suspend fun skipRemainingPlannedSets(exerciseId: Long)
+
+    suspend fun clearSkippedSets(exerciseId: Long)
+
+    suspend fun setExerciseCompleted(exerciseId: Long, completedAtEpochMilli: Long)
 
     suspend fun deleteExercise(exerciseId: Long)
 
@@ -111,6 +123,12 @@ interface GymWorkoutRepository {
 
     suspend fun clearRest(workoutId: Long)
 
+    /**
+     * Cancels a pending rest-complete alarm without alerting.
+     * Used by Skip. Natural rest completion must not call this.
+     */
+    fun cancelScheduledRestAlert()
+
     suspend fun completeWorkout(workoutId: Long, nowEpochMilli: Long = System.currentTimeMillis())
 
     suspend fun discardWorkout(workoutId: Long)
@@ -135,8 +153,10 @@ interface GymWorkoutRepository {
         sets: List<GymWorkoutSet>,
         plannedSetCount: Int = 0,
         skipped: Boolean = false,
+        completedAtEpochMilli: Long? = null,
         routineExerciseId: Long? = null,
         exerciseStableKey: String? = null,
+        canonicalExerciseId: String = "",
     ): Long
 
     fun observeRoutines(): Flow<List<GymRoutine>>
@@ -168,6 +188,72 @@ interface GymWorkoutRepository {
      * routine day, keyed by this session's exercise id.
      */
     suspend fun previousOccurrenceSeeds(session: GymWorkoutSession): Map<Long, GymSetMeasurements>
+
+    /**
+     * Last completed set for each exercise in [session], keyed by workout exercise row id.
+     * Uses canonical [exerciseId] across all completed workouts.
+     */
+    suspend fun previousPerformanceSeeds(session: GymWorkoutSession): Map<Long, GymSetMeasurements>
+
+    suspend fun resolveExerciseSelection(
+        displayName: String,
+        canonicalExerciseId: String = "",
+    ): GymExerciseSelection
+
+    suspend fun searchExercises(
+        query: String,
+        muscleFilter: com.deepak.flow.core.gym.GymMuscleGroup? = null,
+        equipmentFilter: com.deepak.flow.core.gym.GymEquipment? = null,
+        limit: Int = com.deepak.flow.core.gym.GymExerciseNameCatalog.MAX_SUGGESTIONS,
+    ): List<GymExerciseSearchHit>
+
+    suspend fun browseExercises(
+        query: String = "",
+        muscleFilter: com.deepak.flow.core.gym.GymMuscleGroup? = null,
+        equipmentFilter: com.deepak.flow.core.gym.GymEquipment? = null,
+        limit: Int = com.deepak.flow.core.gym.GymExerciseNameCatalog.PICKER_LIMIT,
+    ): List<GymExerciseSearchHit>
+
+    suspend fun getExerciseMetadata(exerciseId: String): com.deepak.flow.core.gym.GymExerciseMetadata?
+
+    suspend fun saveBuiltinExerciseOverride(
+        exerciseId: String,
+        displayName: String? = null,
+        primaryMuscle: com.deepak.flow.core.gym.GymMuscleGroup? = null,
+        secondaryMuscles: List<com.deepak.flow.core.gym.GymMuscleGroup> = emptyList(),
+        equipment: com.deepak.flow.core.gym.GymEquipment? = null,
+    )
+
+    suspend fun clearBuiltinExerciseOverride(exerciseId: String)
+
+    suspend fun saveCustomExerciseMetadata(
+        exerciseId: String,
+        displayName: String? = null,
+        primaryMuscle: com.deepak.flow.core.gym.GymMuscleGroup? = null,
+        secondaryMuscles: List<com.deepak.flow.core.gym.GymMuscleGroup> = emptyList(),
+        equipment: com.deepak.flow.core.gym.GymEquipment? = null,
+    )
+
+    suspend fun createCustomExercise(
+        displayName: String,
+        primaryMuscle: com.deepak.flow.core.gym.GymMuscleGroup? = null,
+        secondaryMuscles: List<com.deepak.flow.core.gym.GymMuscleGroup> = emptyList(),
+        equipment: com.deepak.flow.core.gym.GymEquipment? = null,
+    ): GymExerciseSelection
+
+    suspend fun deleteCustomExercise(exerciseId: String)
+
+    suspend fun listLibraryExercises(
+        query: String = "",
+        muscleFilter: com.deepak.flow.core.gym.GymMuscleGroup? = null,
+        equipmentFilter: com.deepak.flow.core.gym.GymEquipment? = null,
+        sourceFilter: com.deepak.flow.core.gym.GymLibrarySourceFilter =
+            com.deepak.flow.core.gym.GymLibrarySourceFilter.ALL,
+    ): List<GymLibraryExercise>
+
+    suspend fun getLibraryExercise(exerciseId: String): GymLibraryExercise?
+
+    suspend fun getExerciseNameSuggestions(): List<String>
 
     fun observePrimaryRoutine(): Flow<GymRoutine?>
 }

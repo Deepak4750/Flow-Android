@@ -1,5 +1,9 @@
 package com.deepak.flow.core.repository
 
+import com.deepak.flow.core.database.GymCustomExerciseDao
+import com.deepak.flow.core.database.GymCustomExerciseEntity
+import com.deepak.flow.core.database.GymExerciseOverrideDao
+import com.deepak.flow.core.database.GymExerciseOverrideEntity
 import com.deepak.flow.core.database.GymRoutineDao
 import com.deepak.flow.core.database.GymRoutineDayEntity
 import com.deepak.flow.core.database.GymRoutineEntity
@@ -9,6 +13,25 @@ import com.deepak.flow.core.database.GymWorkoutEntity
 import com.deepak.flow.core.database.GymWorkoutExerciseEntity
 import com.deepak.flow.core.database.GymWorkoutSetEntity
 import com.deepak.flow.core.database.UserProfileDao
+import com.deepak.flow.core.gym.GymLibraryExercise
+import com.deepak.flow.core.gym.GymBuiltinExerciseCatalog
+import com.deepak.flow.core.gym.GymBuiltinExerciseOverridePolicy
+import com.deepak.flow.core.gym.GymCustomExerciseRecord
+import com.deepak.flow.core.gym.GymEquipment
+import com.deepak.flow.core.gym.GymExerciseIdentity
+import com.deepak.flow.core.gym.GymExerciseMetadata
+import com.deepak.flow.core.gym.GymExerciseMetadataCodec
+import com.deepak.flow.core.gym.GymExerciseMetadataResolver
+import com.deepak.flow.core.gym.GymExerciseNameCatalog
+import com.deepak.flow.core.gym.GymExerciseNormalizer
+import com.deepak.flow.core.gym.GymExerciseOverrideRecord
+import com.deepak.flow.core.gym.GymExerciseSearchHit
+import com.deepak.flow.core.gym.GymExerciseSelection
+import com.deepak.flow.core.gym.GymExerciseLibrary
+import com.deepak.flow.core.gym.GymLibrarySourceFilter
+import com.deepak.flow.core.gym.GymMuscleGroup
+import com.deepak.flow.core.gym.toEntity
+import com.deepak.flow.core.gym.toRecord
 import com.deepak.flow.core.gym.GymLimits
 import com.deepak.flow.core.gym.GymLogic
 import com.deepak.flow.core.gym.GymRestKind
@@ -23,6 +46,12 @@ import com.deepak.flow.core.gym.GymWorkoutStatus
 import com.deepak.flow.core.gym.GymWorkoutType
 import com.deepak.flow.core.gym.TrackingField
 import com.deepak.flow.core.gym.WeightUnit
+import com.deepak.flow.core.notification.GymRestAlarmCoordinator
+import com.deepak.flow.core.notification.NoOpWorkoutEventNotifier
+import com.deepak.flow.core.notification.WorkoutEventNotifierPort
+import com.deepak.flow.core.notification.GymRestAlarmPort
+import com.deepak.flow.core.notification.GymRestAlarmRequest
+import com.deepak.flow.core.notification.GymRestAlerterPort
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -37,7 +66,20 @@ import java.util.UUID
 class GymWorkoutRepositoryImpl(
     private val dao: GymWorkoutDao,
     private val routineDao: GymRoutineDao,
+    private val customExerciseDao: GymCustomExerciseDao,
+    private val exerciseOverrideDao: GymExerciseOverrideDao,
     private val profileDao: UserProfileDao,
+    private val workoutEvents: WorkoutEventNotifierPort = NoOpWorkoutEventNotifier,
+    private val gymRestAlarms: GymRestAlarmCoordinator = GymRestAlarmCoordinator(
+        alarms = object : GymRestAlarmPort {
+            override fun schedule(request: GymRestAlarmRequest) = Unit
+            override fun cancel() = Unit
+        },
+        alerter = object : GymRestAlerterPort {
+            override fun signal(request: GymRestAlarmRequest) = Unit
+            override fun suppress(request: GymRestAlarmRequest) = Unit
+        },
+    ),
 ) : GymWorkoutRepository {
 
     override fun observeActiveSession(type: GymWorkoutType): Flow<GymWorkoutSession?> =
@@ -101,15 +143,23 @@ class GymWorkoutRepositoryImpl(
     }
 
     override suspend fun startFreeWorkout(weightUnit: WeightUnit): Long {
-        return dao.insertWorkout(
+        val startedAt = System.currentTimeMillis()
+        val id = dao.insertWorkout(
             GymWorkoutEntity(
                 type = GymWorkoutType.FREE.name,
                 status = GymWorkoutStatus.ACTIVE.name,
-                startedAtEpochMilli = System.currentTimeMillis(),
+                startedAtEpochMilli = startedAt,
                 weightUnit = weightUnit.name,
                 restDurationSeconds = GymLimits.SET_REST_DEFAULT_SECONDS,
             ),
         )
+        workoutEvents.onWorkoutStarted(
+            workoutId = id,
+            workoutTitle = "",
+            workoutType = GymWorkoutType.FREE,
+            startedAtEpochMilli = startedAt,
+        )
+        return id
     }
 
     override suspend fun ensureActiveFreeWorkout(weightUnit: WeightUnit): Long {
@@ -134,11 +184,12 @@ class GymWorkoutRepositoryImpl(
         val routine = loadPrimaryRoutine() ?: return null
         val day = routine.currentDay() ?: return null
         if (day.isRestDay || day.exercises.isEmpty()) return null
+        val startedAt = System.currentTimeMillis()
         val workoutId = dao.insertWorkout(
             GymWorkoutEntity(
                 type = GymWorkoutType.ROUTINE.name,
                 status = GymWorkoutStatus.ACTIVE.name,
-                startedAtEpochMilli = System.currentTimeMillis(),
+                startedAtEpochMilli = startedAt,
                 weightUnit = weightUnit.name,
                 restDurationSeconds = GymLimits.SET_REST_DEFAULT_SECONDS,
                 title = GymLogic.formatDayHeading(day.dayIndex, day.name, day.isRestDay),
@@ -155,9 +206,16 @@ class GymWorkoutRepositoryImpl(
                 plannedSetCount = template.setCount,
                 routineExerciseId = template.id,
                 exerciseStableKey = template.stableKey,
+                canonicalExerciseId = template.exerciseId,
             )
         }
         setCurrentExerciseIndex(workoutId, 0)
+        workoutEvents.onWorkoutStarted(
+            workoutId = workoutId,
+            workoutTitle = GymLogic.formatDayHeading(day.dayIndex, day.name, day.isRestDay),
+            workoutType = GymWorkoutType.ROUTINE,
+            startedAtEpochMilli = startedAt,
+        )
         return workoutId
     }
 
@@ -204,20 +262,23 @@ class GymWorkoutRepositoryImpl(
         plannedSetCount: Int,
         routineExerciseId: Long?,
         exerciseStableKey: String?,
+        canonicalExerciseId: String,
     ): Long {
-        val trimmed = name.trim()
-        require(trimmed.isNotEmpty()) { "Name can't be empty." }
+        val selection = resolveExerciseSelection(name, canonicalExerciseId)
+        persistCustomExerciseIfNeeded(selection)
         require(trackingFields.isNotEmpty()) { "Pick at least one tracking field." }
         val order = dao.getExercises(workoutId).size
         val exerciseId = dao.insertExercise(
             GymWorkoutExerciseEntity(
                 workoutId = workoutId,
-                exerciseName = trimmed,
+                exerciseId = selection.exerciseId,
+                exerciseName = selection.displayName,
                 sortOrder = order,
                 note = GymLimits.clampNote(note),
                 trackingFields = GymLogic.encodeTrackingFields(trackingFields),
                 plannedSetCount = if (plannedSetCount > 0) GymLimits.clampSetCount(plannedSetCount) else 0,
                 skipped = false,
+                completedAtEpochMilli = null,
                 routineExerciseId = routineExerciseId,
                 exerciseStableKey = exerciseStableKey,
             ),
@@ -239,15 +300,17 @@ class GymWorkoutRepositoryImpl(
         name: String,
         trackingFields: Set<TrackingField>,
         note: String,
+        canonicalExerciseId: String,
     ) {
         val existing = dao.getExercise(exerciseId) ?: return
-        val trimmed = name.trim()
-        require(trimmed.isNotEmpty()) { "Name can't be empty." }
+        val selection = resolveExerciseSelection(name, canonicalExerciseId)
+        persistCustomExerciseIfNeeded(selection)
         require(trackingFields.isNotEmpty()) { "Pick at least one tracking field." }
         val clampedNote = GymLimits.clampNote(note)
         dao.updateExercise(
             existing.copy(
-                exerciseName = trimmed,
+                exerciseId = selection.exerciseId,
+                exerciseName = selection.displayName,
                 trackingFields = GymLogic.encodeTrackingFields(trackingFields),
                 note = clampedNote,
             ),
@@ -256,7 +319,8 @@ class GymWorkoutRepositoryImpl(
         val template = routineDao.getExercise(templateId) ?: return
         routineDao.updateExercise(
             template.copy(
-                name = trimmed,
+                exerciseId = selection.exerciseId,
+                name = selection.displayName,
                 trackingFields = GymLogic.encodeTrackingFields(trackingFields),
                 note = clampedNote,
             ),
@@ -266,6 +330,42 @@ class GymWorkoutRepositoryImpl(
     override suspend fun setExerciseSkipped(exerciseId: Long, skipped: Boolean) {
         val existing = dao.getExercise(exerciseId) ?: return
         dao.updateExercise(existing.copy(skipped = skipped))
+    }
+
+    override suspend fun skipRemainingPlannedSets(exerciseId: Long) {
+        val existing = dao.getExercise(exerciseId) ?: return
+        if (existing.plannedSetCount <= 0) return
+        val savedSets = dao.getSets(exerciseId)
+        for (setNumber in 1..existing.plannedSetCount) {
+            val alreadyRecorded = savedSets.any { it.setNumber == setNumber && it.saved }
+            if (alreadyRecorded) continue
+            dao.insertSet(
+                GymWorkoutSetEntity(
+                    workoutExerciseId = exerciseId,
+                    setNumber = setNumber,
+                    saved = true,
+                    skipped = true,
+                ),
+            )
+        }
+    }
+
+    override suspend fun clearSkippedSets(exerciseId: Long) {
+        val skippedSets = dao.getSets(exerciseId).filter { it.skipped }
+        skippedSets.forEach { dao.deleteSet(it.id) }
+    }
+
+    override suspend fun setExerciseCompleted(exerciseId: Long, completedAtEpochMilli: Long) {
+        val existing = dao.getExercise(exerciseId) ?: return
+        if (existing.skipped || existing.completedAtEpochMilli != null) return
+        dao.updateExercise(existing.copy(completedAtEpochMilli = completedAtEpochMilli))
+        val workout = dao.getWorkout(existing.workoutId)
+        val workoutType = workout?.type?.let { runCatching { GymWorkoutType.valueOf(it) }.getOrNull() }
+            ?: GymWorkoutType.FREE
+        workoutEvents.onExerciseCompleted(
+            exerciseName = existing.exerciseName,
+            workoutType = workoutType,
+        )
     }
 
     override suspend fun deleteExercise(exerciseId: Long) {
@@ -404,12 +504,25 @@ class GymWorkoutRepositoryImpl(
             GymRestKind.EXERCISE -> GymLimits.clampExerciseRestSeconds(durationSeconds)
             else -> GymLimits.clampSetRestSeconds(durationSeconds)
         }
+        val restEndsAt = nowEpochMilli + seconds * 1000L
         dao.updateWorkout(
             workout.copy(
                 restDurationSeconds = seconds,
-                restEndsAtEpochMilli = nowEpochMilli + seconds * 1000L,
+                restEndsAtEpochMilli = restEndsAt,
                 restKind = kind.name,
             ),
+        )
+        scheduleRestAlarm(workoutId, restEndsAt, nowEpochMilli)
+        val workoutType = runCatching { GymWorkoutType.valueOf(workout.type) }
+            .getOrDefault(GymWorkoutType.FREE)
+        val exerciseName = dao.getExercises(workoutId)
+            .getOrNull(workout.currentExerciseIndex.coerceAtLeast(0))
+            ?.exerciseName
+            .orEmpty()
+        workoutEvents.onRestStarted(
+            exerciseName = exerciseName,
+            restKind = kind,
+            workoutType = workoutType,
         )
     }
 
@@ -435,20 +548,24 @@ class GymWorkoutRepositoryImpl(
         if (extraSeconds < 0) {
             if (remainingSeconds <= minSeconds) return
             val nextSeconds = (remainingSeconds + extraSeconds).coerceAtLeast(minSeconds)
+            val restEndsAt = nowEpochMilli + nextSeconds * 1000L
             dao.updateWorkout(
                 workout.copy(
-                    restEndsAtEpochMilli = nowEpochMilli + nextSeconds * 1000L,
+                    restEndsAtEpochMilli = restEndsAt,
                 ),
             )
+            rescheduleRestAlarm(workoutId, restEndsAt)
             return
         }
         if (remainingSeconds >= maxSeconds) return
         val nextSeconds = (remainingSeconds + extraSeconds).coerceAtMost(maxSeconds)
+        val restEndsAt = nowEpochMilli + nextSeconds * 1000L
         dao.updateWorkout(
             workout.copy(
-                restEndsAtEpochMilli = nowEpochMilli + nextSeconds * 1000L,
+                restEndsAtEpochMilli = restEndsAt,
             ),
         )
+        rescheduleRestAlarm(workoutId, restEndsAt)
     }
 
     override suspend fun clearRest(workoutId: Long) {
@@ -461,8 +578,15 @@ class GymWorkoutRepositoryImpl(
         )
     }
 
+    override fun cancelScheduledRestAlert() {
+        gymRestAlarms.onRestAbandoned()
+    }
+
     override suspend fun completeWorkout(workoutId: Long, nowEpochMilli: Long) {
         val workout = dao.getWorkout(workoutId) ?: return
+        if (workout.restEndsAtEpochMilli != null) {
+            gymRestAlarms.onRestAbandoned()
+        }
         dao.updateWorkout(
             workout.copy(
                 status = GymWorkoutStatus.COMPLETED.name,
@@ -472,11 +596,23 @@ class GymWorkoutRepositoryImpl(
                 restKind = GymRestKind.NONE.name,
             ),
         )
+        val workoutType = runCatching { GymWorkoutType.valueOf(workout.type) }
+            .getOrDefault(GymWorkoutType.FREE)
+        val durationSeconds = GymLogic.elapsedSeconds(workout.startedAtEpochMilli, nowEpochMilli).toInt()
+        workoutEvents.onWorkoutCompleted(
+            workoutTitle = workout.title.orEmpty(),
+            workoutType = workoutType,
+            durationSeconds = durationSeconds,
+        )
         val routineId = workout.routineId ?: return
         advanceRoutineDay(routineId, nowEpochMilli)
     }
 
     override suspend fun discardWorkout(workoutId: Long) {
+        val workout = dao.getWorkout(workoutId)
+        if (workout?.restEndsAtEpochMilli != null) {
+            gymRestAlarms.onRestAbandoned()
+        }
         dao.deleteWorkoutCascade(workoutId)
     }
 
@@ -499,11 +635,13 @@ class GymWorkoutRepositoryImpl(
         sets: List<GymWorkoutSet>,
         plannedSetCount: Int,
         skipped: Boolean,
+        completedAtEpochMilli: Long?,
         routineExerciseId: Long?,
         exerciseStableKey: String?,
+        canonicalExerciseId: String,
     ): Long {
-        val trimmed = name.trim()
-        require(trimmed.isNotEmpty()) { "Name can't be empty." }
+        val selection = resolveExerciseSelection(name, canonicalExerciseId)
+        persistCustomExerciseIfNeeded(selection)
         require(trackingFields.isNotEmpty()) { "Pick at least one tracking field." }
         val existing = dao.getExercises(workoutId)
         existing.filter { it.sortOrder >= sortOrder }.forEach { exercise ->
@@ -512,12 +650,14 @@ class GymWorkoutRepositoryImpl(
         val exerciseId = dao.insertExercise(
             GymWorkoutExerciseEntity(
                 workoutId = workoutId,
-                exerciseName = trimmed,
+                exerciseId = selection.exerciseId,
+                exerciseName = selection.displayName,
                 sortOrder = sortOrder,
                 note = GymLimits.clampNote(note),
                 trackingFields = GymLogic.encodeTrackingFields(trackingFields),
                 plannedSetCount = plannedSetCount,
                 skipped = skipped,
+                completedAtEpochMilli = completedAtEpochMilli,
                 routineExerciseId = routineExerciseId,
                 exerciseStableKey = exerciseStableKey,
             ),
@@ -530,6 +670,7 @@ class GymWorkoutRepositoryImpl(
                     setNumber = set.setNumber,
                     failure = set.failure,
                     saved = set.saved,
+                    skipped = set.skipped,
                 ),
             )
         }
@@ -678,6 +819,195 @@ class GymWorkoutRepositoryImpl(
         )
     }
 
+    override suspend fun getExerciseNameSuggestions(): List<String> =
+        GymExerciseNameCatalog.mergeNames(
+            routineNames = routineDao.getDistinctExerciseNames(),
+            workoutNames = dao.getDistinctExerciseNames(),
+        )
+
+    override suspend fun searchExercises(
+        query: String,
+        muscleFilter: GymMuscleGroup?,
+        equipmentFilter: GymEquipment?,
+        limit: Int,
+    ): List<GymExerciseSearchHit> {
+        val customRecords = loadCustomExerciseRecords()
+        val overrides = loadExerciseOverrideRecords()
+        return GymExerciseNameCatalog.searchExercises(
+            query = query,
+            customExercises = customRecords,
+            historicalNames = getExerciseNameSuggestions(),
+            overridesById = overrides,
+            muscleFilter = muscleFilter,
+            equipmentFilter = equipmentFilter,
+            limit = limit,
+        )
+    }
+
+    override suspend fun browseExercises(
+        query: String,
+        muscleFilter: GymMuscleGroup?,
+        equipmentFilter: GymEquipment?,
+        limit: Int,
+    ): List<GymExerciseSearchHit> {
+        val customRecords = loadCustomExerciseRecords()
+        val overrides = loadExerciseOverrideRecords()
+        return GymExerciseNameCatalog.browseExercises(
+            query = query,
+            customExercises = customRecords,
+            overridesById = overrides,
+            muscleFilter = muscleFilter,
+            equipmentFilter = equipmentFilter,
+            limit = limit,
+        )
+    }
+
+    override suspend fun getExerciseMetadata(exerciseId: String): GymExerciseMetadata? {
+        val trimmed = exerciseId.trim()
+        if (trimmed.isEmpty()) return null
+        if (GymExerciseIdentity.isBuiltinId(trimmed)) {
+            val builtin = GymBuiltinExerciseCatalog.byId(trimmed) ?: return null
+            val override = exerciseOverrideDao.getByExerciseId(trimmed)
+            return GymExerciseMetadataResolver.resolveBuiltin(builtin, override)
+        }
+        if (GymExerciseIdentity.isCustomId(trimmed)) {
+            val custom = customExerciseDao.getById(trimmed) ?: return null
+            return GymExerciseMetadataResolver.resolveCustom(custom)
+        }
+        return null
+    }
+
+    override suspend fun saveBuiltinExerciseOverride(
+        exerciseId: String,
+        displayName: String?,
+        primaryMuscle: GymMuscleGroup?,
+        secondaryMuscles: List<GymMuscleGroup>,
+        equipment: GymEquipment?,
+    ) {
+        require(GymExerciseIdentity.isBuiltinId(exerciseId)) { "Override target must be a built-in exercise ID." }
+        val builtin = GymBuiltinExerciseCatalog.byId(exerciseId)
+            ?: error("Unknown built-in exercise ID.")
+        val entity = GymBuiltinExerciseOverridePolicy.buildOverrideEntity(
+            builtin = builtin,
+            displayName = displayName,
+            primaryMuscle = primaryMuscle,
+            secondaryMuscles = secondaryMuscles,
+            equipment = equipment,
+            nowEpochMilli = System.currentTimeMillis(),
+        )
+        if (entity == null) {
+            exerciseOverrideDao.delete(exerciseId)
+        } else {
+            exerciseOverrideDao.upsert(entity)
+        }
+    }
+
+    override suspend fun clearBuiltinExerciseOverride(exerciseId: String) {
+        require(GymExerciseIdentity.isBuiltinId(exerciseId)) { "Override target must be a built-in exercise ID." }
+        exerciseOverrideDao.delete(exerciseId)
+    }
+
+    override suspend fun saveCustomExerciseMetadata(
+        exerciseId: String,
+        displayName: String?,
+        primaryMuscle: GymMuscleGroup?,
+        secondaryMuscles: List<GymMuscleGroup>,
+        equipment: GymEquipment?,
+    ) {
+        val existing = customExerciseDao.getById(exerciseId) ?: return
+        val resolvedName = displayName?.trim()?.takeIf { it.isNotEmpty() } ?: existing.displayName
+        customExerciseDao.insert(
+            existing.copy(
+                displayName = resolvedName,
+                normalizedKey = GymExerciseNormalizer.normalizeKey(resolvedName),
+                primaryMuscle = primaryMuscle?.name,
+                secondaryMuscles = GymExerciseMetadataCodec.encodeMuscles(secondaryMuscles),
+                equipment = GymExerciseMetadataCodec.encodeEquipment(equipment),
+            ),
+        )
+    }
+
+    override suspend fun deleteCustomExercise(exerciseId: String) {
+        require(GymExerciseIdentity.isCustomId(exerciseId)) {
+            "Only custom exercises can be deleted from the library."
+        }
+        customExerciseDao.deleteById(exerciseId)
+    }
+
+    override suspend fun createCustomExercise(
+        displayName: String,
+        primaryMuscle: GymMuscleGroup?,
+        secondaryMuscles: List<GymMuscleGroup>,
+        equipment: GymEquipment?,
+    ): GymExerciseSelection {
+        val trimmed = displayName.trim()
+        require(trimmed.isNotEmpty()) { "Name can't be empty." }
+        GymBuiltinExerciseCatalog.resolveExact(trimmed)?.let { builtin ->
+            return GymExerciseSelection(
+                exerciseId = builtin.id,
+                displayName = builtin.canonicalName,
+                isCustom = false,
+            )
+        }
+        val normalizedKey = GymExerciseNormalizer.normalizeKey(trimmed)
+        customExerciseDao.getByNormalizedKey(normalizedKey)?.let { existing ->
+            return GymExerciseSelection(
+                exerciseId = existing.id,
+                displayName = existing.displayName,
+                isCustom = true,
+            )
+        }
+        val customId = GymExerciseIdentity.newCustomId()
+        val record = GymCustomExerciseRecord(
+            id = customId,
+            displayName = trimmed,
+            normalizedKey = normalizedKey,
+            createdAtEpochMilli = System.currentTimeMillis(),
+            primaryMuscle = primaryMuscle,
+            secondaryMuscles = secondaryMuscles,
+            equipment = equipment,
+        )
+        customExerciseDao.insert(record.toEntity())
+        return GymExerciseSelection(
+            exerciseId = record.id,
+            displayName = record.displayName,
+            isCustom = true,
+        )
+    }
+
+    override suspend fun listLibraryExercises(
+        query: String,
+        muscleFilter: GymMuscleGroup?,
+        equipmentFilter: GymEquipment?,
+        sourceFilter: GymLibrarySourceFilter,
+    ): List<GymLibraryExercise> = GymExerciseLibrary.listExercises(
+        query = query,
+        customExercises = loadCustomExerciseRecords(),
+        overridesById = loadExerciseOverrideRecords(),
+        muscleFilter = muscleFilter,
+        equipmentFilter = equipmentFilter,
+        sourceFilter = sourceFilter,
+    )
+
+    override suspend fun getLibraryExercise(exerciseId: String): GymLibraryExercise? =
+        GymExerciseLibrary.getExercise(
+            exerciseId = exerciseId,
+            customExercises = loadCustomExerciseRecords(),
+            overridesById = loadExerciseOverrideRecords(),
+        )
+
+    override suspend fun resolveExerciseSelection(
+        displayName: String,
+        canonicalExerciseId: String,
+    ): GymExerciseSelection {
+        val customByKey = loadCustomExerciseRecords().associateBy { it.normalizedKey }
+        return GymExerciseIdentity.resolveFromSelection(
+            exerciseId = canonicalExerciseId,
+            displayName = displayName,
+            existingCustomByKey = customByKey,
+        )
+    }
+
     override suspend fun previousOccurrenceSeeds(
         session: GymWorkoutSession,
     ): Map<Long, GymSetMeasurements> {
@@ -694,6 +1024,7 @@ class GymWorkoutRepositoryImpl(
         return session.exercises.mapNotNull { exercise ->
             val match = GymLogic.matchPreviousExercise(
                 previousExercises = previousSession.exercises,
+                exerciseId = exercise.exerciseId,
                 routineExerciseId = exercise.routineExerciseId,
                 exerciseStableKey = exercise.exerciseStableKey,
                 name = exercise.name,
@@ -701,6 +1032,64 @@ class GymWorkoutRepositoryImpl(
             val last = GymLogic.lastSavedSet(match?.sets.orEmpty()) ?: return@mapNotNull null
             exercise.id to last.measurements
         }.toMap()
+    }
+
+    override suspend fun previousPerformanceSeeds(
+        session: GymWorkoutSession,
+    ): Map<Long, GymSetMeasurements> {
+        val occurrenceSeeds = if (session.type == GymWorkoutType.ROUTINE) {
+            previousOccurrenceSeeds(session)
+        } else {
+            emptyMap()
+        }
+        return session.exercises.mapNotNull { exercise ->
+            val canonicalId = exercise.exerciseId.trim()
+            val seed = if (canonicalId.isNotEmpty()) {
+                lastSavedSetForCanonicalExercise(canonicalId, excludeWorkoutId = session.id)
+            } else {
+                null
+            }
+            val measurements = occurrenceSeeds[exercise.id]
+                ?: seed
+                ?: return@mapNotNull null
+            exercise.id to measurements
+        }.toMap()
+    }
+
+    private suspend fun lastSavedSetForCanonicalExercise(
+        canonicalExerciseId: String,
+        excludeWorkoutId: Long,
+    ): GymSetMeasurements? {
+        val entity = dao.getLatestCompletedExerciseByCanonicalId(
+            status = GymWorkoutStatus.COMPLETED.name,
+            exerciseId = canonicalExerciseId,
+            excludeWorkoutId = excludeWorkoutId,
+        ) ?: return null
+        val last = GymLogic.lastSavedSet(
+            dao.getSets(entity.id).map { it.toDomain() },
+        ) ?: return null
+        return last.measurements
+    }
+
+    private suspend fun loadCustomExerciseRecords(): List<GymCustomExerciseRecord> =
+        customExerciseDao.getAll().map { it.toRecord() }
+
+    private suspend fun loadExerciseOverrideRecords(): Map<String, GymExerciseOverrideRecord> =
+        exerciseOverrideDao.getAll().associate { entity -> entity.exerciseId to entity.toRecord() }
+
+    private suspend fun persistCustomExerciseIfNeeded(selection: GymExerciseSelection) {
+        if (!selection.isCustom) return
+        val normalizedKey = GymExerciseNormalizer.normalizeKey(selection.displayName)
+        val existing = customExerciseDao.getByNormalizedKey(normalizedKey)
+        if (existing != null) return
+        customExerciseDao.insert(
+            GymCustomExerciseEntity(
+                id = selection.exerciseId,
+                displayName = selection.displayName,
+                normalizedKey = normalizedKey,
+                createdAtEpochMilli = System.currentTimeMillis(),
+            ),
+        )
     }
 
     private suspend fun loadPrimaryRoutine(): GymRoutine? {
@@ -763,11 +1152,17 @@ class GymWorkoutRepositoryImpl(
                     }
                     require(exercise.name.trim().isNotEmpty()) { "Name can't be empty." }
                     val stableKey = exercise.stableKey.ifBlank { UUID.randomUUID().toString() }
+                    val selection = resolveExerciseSelection(
+                        displayName = exercise.name,
+                        canonicalExerciseId = exercise.exerciseId,
+                    )
+                    persistCustomExerciseIfNeeded(selection)
                     routineDao.insertExercise(
                         GymRoutineExerciseEntity(
                             dayId = dayId,
                             stableKey = stableKey,
-                            name = exercise.name.trim(),
+                            exerciseId = selection.exerciseId,
+                            name = selection.displayName,
                             trackingFields = GymLogic.encodeTrackingFields(fields),
                             sortOrder = exerciseIndex,
                             setCount = GymLimits.clampSetCount(exercise.setCount),
@@ -814,6 +1209,28 @@ class GymWorkoutRepositoryImpl(
             },
         )
     }
+
+    private suspend fun scheduleRestAlarm(
+        workoutId: Long,
+        restEndsAtEpochMilli: Long,
+        nowEpochMilli: Long,
+    ) {
+        val request = restAlarmRequest(workoutId, restEndsAtEpochMilli) ?: return
+        gymRestAlarms.onRestStarted(request, nowEpochMilli)
+    }
+
+    private suspend fun rescheduleRestAlarm(workoutId: Long, restEndsAtEpochMilli: Long) {
+        val request = restAlarmRequest(workoutId, restEndsAtEpochMilli) ?: return
+        gymRestAlarms.onRestExtended(request)
+    }
+
+    private suspend fun restAlarmRequest(
+        workoutId: Long,
+        restEndsAtEpochMilli: Long,
+    ): GymRestAlarmRequest? {
+        val entity = dao.getWorkout(workoutId) ?: return null
+        return GymRestAlarmRequest.from(loadSession(entity), restEndsAtEpochMilli)
+    }
 }
 
 private fun GymWorkoutEntity.toDomain(exercises: List<GymWorkoutExercise>) = GymWorkoutSession(
@@ -839,6 +1256,7 @@ private fun GymWorkoutEntity.toDomain(exercises: List<GymWorkoutExercise>) = Gym
 private fun GymWorkoutExerciseEntity.toDomain(sets: List<GymWorkoutSet>) = GymWorkoutExercise(
     id = id,
     workoutId = workoutId,
+    exerciseId = exerciseId,
     name = exerciseName,
     sortOrder = sortOrder,
     note = note,
@@ -846,6 +1264,7 @@ private fun GymWorkoutExerciseEntity.toDomain(sets: List<GymWorkoutSet>) = GymWo
     sets = sets,
     plannedSetCount = plannedSetCount,
     skipped = skipped,
+    completedAtEpochMilli = completedAtEpochMilli,
     routineExerciseId = routineExerciseId,
     exerciseStableKey = exerciseStableKey,
 )
@@ -876,6 +1295,7 @@ private fun GymRoutineExerciseEntity.toDomain() = GymRoutineExercise(
     id = id,
     dayId = dayId,
     stableKey = stableKey,
+    exerciseId = exerciseId,
     name = name,
     trackingFields = GymLogic.decodeTrackingFields(trackingFields),
     sortOrder = sortOrder,
@@ -900,6 +1320,7 @@ private fun GymWorkoutSetEntity.toDomain() = GymWorkoutSet(
     ),
     failure = failure,
     saved = saved,
+    skipped = skipped,
 )
 
 private fun GymSetMeasurements.toEntity(
@@ -908,6 +1329,7 @@ private fun GymSetMeasurements.toEntity(
     setNumber: Int,
     failure: Boolean,
     saved: Boolean,
+    skipped: Boolean = false,
 ) = GymWorkoutSetEntity(
     id = id,
     workoutExerciseId = workoutExerciseId,
@@ -923,5 +1345,6 @@ private fun GymSetMeasurements.toEntity(
     rounds = rounds,
     failure = failure,
     saved = saved,
+    skipped = skipped,
 )
 

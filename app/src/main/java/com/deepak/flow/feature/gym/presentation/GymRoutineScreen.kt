@@ -43,6 +43,7 @@ fun GymRoutineScreen(
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onBack: () -> Unit,
     onOpenRoutines: () -> Unit,
+    onNewRoutine: () -> Unit,
     onEditRoutine: (Long) -> Unit,
     onStartRoutine: () -> Unit,
     modifier: Modifier = Modifier,
@@ -69,7 +70,7 @@ fun GymRoutineScreen(
             Spacer(modifier = Modifier.height(FlowSpacing.xl))
             FlowButton(
                 text = "New Routine",
-                onClick = onOpenRoutines,
+                onClick = onNewRoutine,
                 leadingIcon = Icons.Default.Add,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -136,7 +137,7 @@ fun GymRoutineScreen(
                 Spacer(modifier = Modifier.height(FlowSpacing.lg))
                 if (uiState.canConfirmRestDay) {
                     FlowButton(
-                        text = "Continue",
+                        text = "Done for today",
                         onClick = viewModel::confirmRestDay,
                         enabled = !uiState.progressionInFlight,
                         modifier = Modifier.fillMaxWidth(),

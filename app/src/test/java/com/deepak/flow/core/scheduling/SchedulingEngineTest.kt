@@ -161,7 +161,7 @@ class SchedulingEngineTest {
     }
 
     @Test
-    fun activeHours_absoluteSchedule_skipsInactive() {
+    fun activeHours_absoluteSchedule_ignoredForNonHourly() {
         val active = ActiveHours(LocalTime.of(8, 0), LocalTime.of(23, 0))
         val ref = instant(LocalDate.of(2026, 3, 10), LocalTime.of(7, 0))
         val next = engine.calculateNextOccurrence(
@@ -172,7 +172,7 @@ class SchedulingEngineTest {
             ref,
             zone,
         )
-        assertEquals(instant(LocalDate.of(2026, 3, 10), LocalTime.of(9, 0)), next)
+        assertEquals(instant(LocalDate.of(2026, 3, 10), LocalTime.of(7, 30)), next)
     }
 
     @Test
@@ -191,6 +191,17 @@ class SchedulingEngineTest {
         )
         assertNotNull(next)
         assertEquals(LocalTime.of(8, 0), next!!.atZone(zone).toLocalTime())
+    }
+
+    @Test
+    fun schedulingActiveHours_onlyForEveryFewHours() {
+        val active = ActiveHours(LocalTime.of(8, 0), LocalTime.of(23, 0))
+        assertEquals(
+            active,
+            engine.schedulingActiveHours(Schedule.EveryXHours(4), active),
+        )
+        assertNull(engine.schedulingActiveHours(Schedule.Daily, active))
+        assertNull(engine.schedulingActiveHours(Schedule.EveryXDays(3), active))
     }
 
     @Test

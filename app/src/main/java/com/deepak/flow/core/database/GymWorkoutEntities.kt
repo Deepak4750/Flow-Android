@@ -37,12 +37,15 @@ data class GymWorkoutExerciseEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,
     val workoutId: Long,
+    /** Canonical exercise identity (built-in or custom). */
+    val exerciseId: String = "",
     val exerciseName: String,
     val sortOrder: Int,
     val note: String = "",
     val trackingFields: String = "",
     val plannedSetCount: Int = 0,
     val skipped: Boolean = false,
+    val completedAtEpochMilli: Long? = null,
     val routineExerciseId: Long? = null,
     val exerciseStableKey: String? = null,
 )
@@ -67,5 +70,6 @@ data class GymWorkoutSetEntity(
     val rounds: Int? = null,
     val failure: Boolean = false,
     val saved: Boolean = false,
+    val skipped: Boolean = false,
 )
 

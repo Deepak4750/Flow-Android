@@ -2,7 +2,7 @@ package com.deepak.flow.core.model
 
 sealed interface OnboardingGate {
     data object Loading : OnboardingGate
-    data object ShowTutorial : OnboardingGate
+    data object ShowOnboarding : OnboardingGate
     data object Ready : OnboardingGate
 }
 
@@ -11,7 +11,7 @@ fun onboardingGate(profileLoaded: Boolean, profile: UserProfile?): OnboardingGat
     return if (profile?.onboardingCompleted == true) {
         OnboardingGate.Ready
     } else {
-        OnboardingGate.ShowTutorial
+        OnboardingGate.ShowOnboarding
     }
 }
 

@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,6 +75,7 @@ fun HomeScreen(
     onAddWaterMl: (Int) -> Unit,
     onOpenWater: () -> Unit,
     onOpenGymRoutine: () -> Unit,
+    onStartGymWorkout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -147,6 +149,7 @@ fun HomeScreen(
                     exercises = gymState.currentDay?.exercises.orEmpty().map { it.name },
                     isRestDay = gymState.isRestDay,
                     onOpenGymRoutine = onOpenGymRoutine,
+                    onStartWorkout = onStartGymWorkout,
                 )
             }
 
@@ -210,6 +213,7 @@ private fun HomeGymWorkoutSection(
     exercises: List<String>,
     isRestDay: Boolean,
     onOpenGymRoutine: () -> Unit,
+    onStartWorkout: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val canExpand = !isRestDay && exercises.isNotEmpty()
@@ -261,5 +265,14 @@ private fun HomeGymWorkoutSection(
                 Spacer(modifier = Modifier.height(FlowSpacing.sm))
             }
         }
+    }
+
+    if (!isRestDay) {
+        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        FlowButton(
+            text = "Start Workout",
+            onClick = onStartWorkout,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }

@@ -21,18 +21,8 @@ fun vibrateRestComplete(context: Context) {
         } ?: return
         if (!vibrator.hasVibrator()) return
 
-        val shortOn = 150L
-        val longOn = 480L
-        val pause = 180L
-        val amplitude = 120
-
-        val cycle = listOf(
-            shortOn, pause,
-            shortOn, pause,
-            longOn, pause,
-            longOn, pause,
-        )
-        val segments = cycle + cycle
+        val segments = GymRestVibrationPattern.vibratorSegments()
+        val amplitude = GymRestVibrationPattern.AMPLITUDE
 
         val timings = LongArray(segments.size + 1)
         val amplitudes = IntArray(segments.size + 1)

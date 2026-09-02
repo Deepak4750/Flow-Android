@@ -2,8 +2,13 @@ package com.deepak.flow.feature.gym.presentation
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -16,11 +21,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.ClickableText
@@ -29,11 +36,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -52,11 +64,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.deepak.flow.app.components.ExerciseNameField
+import com.deepak.flow.app.components.ExercisePickerSheet
 import com.deepak.flow.app.components.FlowButton
+import com.deepak.flow.app.components.rememberReduceMotionEnabled
 import com.deepak.flow.app.components.FlowButtonVariant
 import com.deepak.flow.app.components.FlowChip
 import com.deepak.flow.app.components.FlowDialog
 import com.deepak.flow.app.components.FlowHairlineDivider
+import com.deepak.flow.app.components.FlowIconAction
 import com.deepak.flow.app.components.FlowMetaText
 import com.deepak.flow.app.components.FlowScreenTitle
 import com.deepak.flow.app.components.FlowSectionLabel
@@ -73,10 +89,17 @@ import com.deepak.flow.app.theme.FlowSpacing
 import com.deepak.flow.app.theme.FlowTextDisabled
 import com.deepak.flow.app.theme.FlowTextPrimary
 import com.deepak.flow.app.theme.FlowTextSecondary
+import com.deepak.flow.app.theme.FlowSurfaceRaised
 import com.deepak.flow.app.theme.FlowTextTertiary
 import com.deepak.flow.app.theme.FlowWhite
+import com.deepak.flow.core.gym.GymEquipment
 import com.deepak.flow.core.gym.GymLimits
 import com.deepak.flow.core.gym.GymLogic
+import com.deepak.flow.core.gym.GymMuscleGroup
+import com.deepak.flow.core.gym.GymRestKind
+import com.deepak.flow.core.gym.GymWorkoutExercisePolicy
+import com.deepak.flow.core.gym.GymWorkoutSwitchPolicy
+import com.deepak.flow.core.gym.GymRestUiPolicy
 import com.deepak.flow.core.gym.GymWorkoutExercise
 import com.deepak.flow.core.gym.GymWorkoutSet
 import com.deepak.flow.core.gym.TrackingField
@@ -98,6 +121,52 @@ fun FreeWorkoutScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var pickerVisible by remember { mutableStateOf(false) }
+    var pickerMuscle by remember { mutableStateOf<GymMuscleGroup?>(null) }
+    var pickerEquipment by remember { mutableStateOf<GymEquipment?>(null) }
+    var pickerQuery by remember { mutableStateOf("") }
+
+    LaunchedEffect(pickerVisible, pickerQuery, pickerMuscle, pickerEquipment) {
+        if (!pickerVisible) return@LaunchedEffect
+        viewModel.browseExercises(pickerQuery, pickerMuscle, pickerEquipment)
+    }
+
+    ExercisePickerSheet(
+        visible = pickerVisible,
+        query = pickerQuery,
+        onQueryChange = { query ->
+            pickerQuery = query
+            viewModel.browseExercises(query, pickerMuscle, pickerEquipment)
+        },
+        results = uiState.exerciseSearchResults,
+        selectedMuscle = pickerMuscle,
+        onMuscleSelected = { muscle ->
+            pickerMuscle = muscle
+            viewModel.browseExercises(pickerQuery, muscle, pickerEquipment)
+        },
+        selectedEquipment = pickerEquipment,
+        onEquipmentSelected = { equipment ->
+            pickerEquipment = equipment
+            viewModel.browseExercises(pickerQuery, pickerMuscle, equipment)
+        },
+        onSelectExercise = { exerciseId, displayName ->
+            viewModel.onExerciseSelected(exerciseId, displayName)
+            pickerVisible = false
+        },
+        onCreateCustomExercise = { displayName ->
+            viewModel.onCreateCustomExercise(displayName)
+            pickerVisible = false
+        },
+        onDismiss = { pickerVisible = false },
+    )
+
+    val openExercisePicker = {
+        pickerQuery = uiState.exerciseDraft.name
+        pickerMuscle = null
+        pickerEquipment = null
+        pickerVisible = true
+        viewModel.browseExercises(pickerQuery)
+    }
 
     LaunchedEffect(uiState.leaveWorkout) {
         if (uiState.leaveWorkout) onLeave()
@@ -114,13 +183,13 @@ fun FreeWorkoutScreen(
         onGymEnabledChange = onGymEnabledChange,
         onDestinationClick = onDestinationClick,
         onBack = {
-            when (uiState.phase) {
-                FreeWorkoutPhase.SETUP -> onLeave()
-                FreeWorkoutPhase.EDIT_EXERCISE -> viewModel.cancelExerciseEditor()
-                FreeWorkoutPhase.RESTING -> viewModel.skipRest()
-                FreeWorkoutPhase.END_OPTIONS -> viewModel.dismissEndOptions()
-                FreeWorkoutPhase.COMPLETED -> viewModel.finishAndLeave()
-                FreeWorkoutPhase.SESSION -> viewModel.openEndOptions()
+            when (freeWorkoutBackEffect(uiState.phase)) {
+                FreeWorkoutBackEffect.Leave -> onLeave()
+                FreeWorkoutBackEffect.CancelExerciseEditor -> viewModel.cancelExerciseEditor()
+                FreeWorkoutBackEffect.None -> Unit
+                FreeWorkoutBackEffect.DismissEndOptions -> viewModel.dismissEndOptions()
+                FreeWorkoutBackEffect.FinishAndLeave -> viewModel.finishAndLeave()
+                FreeWorkoutBackEffect.OpenEndOptions -> viewModel.openEndOptions()
             }
         },
         modifier = modifier,
@@ -144,23 +213,16 @@ fun FreeWorkoutScreen(
                     onDone = viewModel::finishAndLeave,
                 )
             }
-            uiState.phase == FreeWorkoutPhase.RESTING -> {
-                RestPane(
-                    restKind = uiState.restKind,
-                    remainingLabel = uiState.restRemainingLabel,
-                    currentExercise = uiState.currentExercise,
-                    nextExercise = uiState.upNextExercise,
-                    weightUnit = uiState.displayWeightUnit,
-                    onSkip = viewModel::skipRest,
-                    onMinusTen = { viewModel.addRestSeconds(-10) },
-                    onAddTen = { viewModel.addRestSeconds(10) },
-                )
-            }
             uiState.phase == FreeWorkoutPhase.EDIT_EXERCISE -> {
                 ExerciseEditorPane(
                     draft = uiState.exerciseDraft,
                     message = uiState.message,
+                    nameSuggestions = uiState.exerciseNameSuggestions,
+                    searchResults = uiState.exerciseSearchResults,
                     onNameChange = viewModel::onExerciseNameChange,
+                    onSelectExercise = viewModel::onExerciseSelected,
+                    onCreateCustomExercise = viewModel::onCreateCustomExercise,
+                    onBrowseExercises = openExercisePicker,
                     onNoteChange = viewModel::onExerciseNoteChange,
                     onToggleField = viewModel::toggleTrackingField,
                     onToggleFieldsEditor = viewModel::toggleShowFieldsEditor,
@@ -176,17 +238,22 @@ fun FreeWorkoutScreen(
             uiState.phase == FreeWorkoutPhase.END_OPTIONS -> {
                 EndOptionsPane(
                     stopwatchLabel = uiState.stopwatchLabel,
+                    canCompleteWorkout = uiState.canCompleteWorkout,
+                    completionBlockReason = uiState.workoutCompletionBlockReason,
                     onComplete = viewModel::completeWorkout,
                     onDiscard = viewModel::discardWorkout,
                     onContinue = viewModel::dismissEndOptions,
                 )
             }
-            else -> {
+            uiState.phase == FreeWorkoutPhase.SESSION ||
+                uiState.phase == FreeWorkoutPhase.RESTING -> {
                 SessionPane(
                     uiState = uiState,
                     onFinishExercise = viewModel::finishExercise,
                     onAddNewSet = viewModel::addNewSet,
                     onSkipExercise = viewModel::skipExercise,
+                    onUnskipExercise = viewModel::unskipExercise,
+                    onSaveExercise = viewModel::saveExercise,
                     onEditExercise = viewModel::openEditExercise,
                     onSelectExercise = viewModel::selectExercise,
                     onDraftChange = viewModel::onSetDraftChange,
@@ -195,6 +262,9 @@ fun FreeWorkoutScreen(
                     onClearEditingSet = viewModel::clearEditingSet,
                     onDeleteSet = viewModel::deleteSet,
                     onComposeNameChange = viewModel::onExerciseNameChange,
+                    onComposeSelectExercise = viewModel::onExerciseSelected,
+                    onComposeCreateCustomExercise = viewModel::onCreateCustomExercise,
+                    onBrowseExercises = openExercisePicker,
                     onComposeNoteChange = viewModel::onExerciseNoteChange,
                     onToggleComposeFields = viewModel::toggleShowFieldsEditor,
                     onToggleComposeNote = viewModel::toggleShowNoteEditor,
@@ -210,6 +280,11 @@ fun FreeWorkoutScreen(
                     onDismissSetRemovedUndo = viewModel::dismissSetRemovedUndo,
                     onUndoDeleteExercise = viewModel::undoDeleteExercise,
                     onDismissExerciseRemovedUndo = viewModel::dismissExerciseRemovedUndo,
+                    onScrollHandled = viewModel::clearScrollToExercise,
+                    onSkipRest = viewModel::skipRest,
+                    onRestMinusTen = { viewModel.addRestSeconds(-10) },
+                    onRestAddTen = { viewModel.addRestSeconds(10) },
+                    onAddExercise = viewModel::startComposingExercise,
                 )
             }
         }
@@ -237,6 +312,8 @@ private fun SessionPane(
     onFinishExercise: () -> Unit,
     onAddNewSet: () -> Unit,
     onSkipExercise: () -> Unit,
+    onUnskipExercise: (Long) -> Unit,
+    onSaveExercise: () -> Unit,
     onEditExercise: (GymWorkoutExercise) -> Unit,
     onSelectExercise: (Int) -> Unit,
     onDraftChange: ((SetDraft) -> SetDraft) -> Unit,
@@ -245,6 +322,9 @@ private fun SessionPane(
     onClearEditingSet: () -> Unit,
     onDeleteSet: (Long) -> Unit,
     onComposeNameChange: (String) -> Unit,
+    onComposeSelectExercise: (String, String) -> Unit,
+    onComposeCreateCustomExercise: (String) -> Unit,
+    onBrowseExercises: () -> Unit,
     onComposeNoteChange: (String) -> Unit,
     onToggleComposeFields: () -> Unit,
     onToggleComposeNote: () -> Unit,
@@ -260,10 +340,27 @@ private fun SessionPane(
     onDismissSetRemovedUndo: () -> Unit,
     onUndoDeleteExercise: () -> Unit,
     onDismissExerciseRemovedUndo: () -> Unit,
+    onScrollHandled: () -> Unit,
+    onSkipRest: () -> Unit,
+    onRestMinusTen: () -> Unit,
+    onRestAddTen: () -> Unit,
+    onAddExercise: () -> Unit,
 ) {
     val session = uiState.session
     val weightUnit = uiState.displayWeightUnit
     val currentIndex = session?.currentExerciseIndex ?: 0
+    val isResting = uiState.isResting
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(uiState.scrollToExerciseKey) {
+        val scrollKey = uiState.scrollToExerciseKey ?: return@LaunchedEffect
+        val targetIndex = session?.exercises?.indexOfFirst { it.id == scrollKey }?.takeIf { it >= 0 }
+            ?: return@LaunchedEffect
+        if (session.exercises.isNotEmpty()) {
+            listState.animateScrollToItem(targetIndex.coerceIn(0, session.exercises.lastIndex))
+        }
+        onScrollHandled()
+    }
 
     LaunchedEffect(uiState.message) {
         if (uiState.message != null) delayMessageClear(onClearMessage)
@@ -277,27 +374,94 @@ private fun SessionPane(
         )
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
         FlowHairlineDivider()
-        Spacer(modifier = Modifier.height(FlowSpacing.lg))
+        PinnedRestBand(
+            visible = isResting,
+            remainingLabel = uiState.restRemainingLabel,
+            restKind = uiState.restKind,
+            exerciseName = uiState.currentExercise?.name,
+            onSkip = onSkipRest,
+            onMinusTen = onRestMinusTen,
+            onAddTen = onRestAddTen,
+        )
+        if (isResting) {
+            Spacer(modifier = Modifier.height(FlowSpacing.md))
+        } else {
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+        }
 
         val exercises = session?.exercises.orEmpty()
+        val activeExercise = exercises.getOrNull(currentIndex)
+        val hasFocusedExerciseInSession = activeExercise != null && !uiState.composingExercise
+        if (!uiState.isRoutine && !isResting) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = FlowSpacing.md),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FlowSectionLabel("Current exercises")
+                FlowTextAction(
+                    text = "+",
+                    onClick = onAddExercise,
+                    modifier = Modifier.padding(start = FlowSpacing.md),
+                )
+            }
+        }
         LazyColumn(
             modifier = Modifier.weight(1f),
+            state = listState,
         ) {
             itemsIndexed(
                 items = exercises,
                 key = { _, exercise -> exercise.id },
             ) { index, exercise ->
-                val isActive = !uiState.composingExercise && index == currentIndex
+                val isFocused = !uiState.composingExercise && index == currentIndex
+                val isEditable = GymWorkoutExercisePolicy.isExerciseEditable(exercise)
+                val isSelectable = GymWorkoutExercisePolicy.isExerciseSelectable(exercise)
+                val isSkipped = GymWorkoutExercisePolicy.isExerciseSkipped(exercise)
+                val isActivelyEditing = isFocused && isEditable && uiState.hasActiveEditSession
+                val switchDraftSnapshot = uiState.setDraft.toSnapshot()
+                val switchTrackingFields = activeExercise?.trackingFields.orEmpty().ifEmpty {
+                    exercise.trackingFields
+                }
+                val switchEnabled = GymWorkoutSwitchPolicy.canSwitchToTarget(
+                    activeExercise = activeExercise,
+                    targetExercise = exercise,
+                    trackingFields = switchTrackingFields,
+                    setDraft = switchDraftSnapshot,
+                    setEditorVisible = uiState.setEditorVisible,
+                    awaitingNextAction = uiState.awaitingNextAction,
+                    composingExercise = uiState.composingExercise,
+                    isResting = isResting,
+                )
                 Column(modifier = Modifier.fillMaxWidth()) {
                     ExerciseBlock(
                         exercise = exercise,
-                        isActive = isActive,
+                        isFocused = isFocused,
+                        isEditable = isEditable,
+                        isSelectable = isSelectable,
+                        isSkipped = isSkipped,
+                        isActivelyEditing = isActivelyEditing,
+                        isResting = isResting,
+                        switchEnabled = switchEnabled,
+                        hasFocusedExerciseInSession = hasFocusedExerciseInSession,
                         weightUnit = weightUnit,
                         setDraft = uiState.setDraft,
-                        setEditorVisible = isActive && uiState.setEditorVisible,
-                        awaitingNextAction = isActive && uiState.awaitingNextAction,
+                        setEditorVisible = GymRestUiPolicy.shouldShowSetEditor(
+                            exercise = exercise,
+                            isResting = isResting,
+                            isFocused = isFocused,
+                            setEditorVisible = uiState.setEditorVisible,
+                        ),
+                        awaitingNextAction = GymRestUiPolicy.shouldShowAwaitingActions(
+                            isResting = isResting,
+                            isFocused = isFocused,
+                            isEditable = isEditable,
+                            awaitingNextAction = uiState.awaitingNextAction,
+                        ),
                         canSaveSet = uiState.canSaveSet,
-                        message = uiState.message.takeIf { isActive },
+                        message = uiState.message.takeIf { isFocused },
                         onSelect = { onSelectExercise(index) },
                         onEditExercise = { onEditExercise(exercise) },
                         onEditSet = { set -> onEditSet(exercise, set) },
@@ -308,6 +472,8 @@ private fun SessionPane(
                         onAddNewSet = onAddNewSet,
                         onFinishExercise = onFinishExercise,
                         onSkipExercise = onSkipExercise.takeIf { uiState.isRoutine },
+                        onUnskipExercise = { onUnskipExercise(exercise.id) },
+                        onSaveExercise = onSaveExercise.takeUnless { uiState.isRoutine },
                         saveSetLabel = uiState.saveSetLabel,
                         finishExerciseLabel = uiState.finishExerciseLabel,
                         onStepWeight = onStepWeight,
@@ -315,26 +481,34 @@ private fun SessionPane(
                         onStepIncline = onStepIncline,
                         onStepResistance = onStepResistance,
                         onStepRounds = onStepRounds,
-                        showUpNext = isActive && uiState.showUpNextInSession,
+                        showUpNext = !isResting && isFocused && isEditable && uiState.showUpNextInSession,
                         upNextExercise = uiState.upNextExercise,
                     )
-                    if (index < exercises.lastIndex || uiState.composingExercise) {
+                    if (
+                        (index < exercises.lastIndex || uiState.composingExercise) &&
+                        !isFocused
+                    ) {
                         Spacer(modifier = Modifier.height(FlowSpacing.xl))
                         FlowHairlineDivider()
                         Spacer(modifier = Modifier.height(FlowSpacing.xl))
                     }
                 }
             }
-            if (uiState.composingExercise && !uiState.isRoutine) {
+            if (uiState.composingExercise && !uiState.isRoutine && !isResting) {
                 item(key = "composer") {
                     InlineExerciseComposer(
                         draft = uiState.exerciseDraft,
                         setDraft = uiState.setDraft,
                         weightUnit = weightUnit,
+                        nameSuggestions = uiState.exerciseNameSuggestions,
+                        searchResults = uiState.exerciseSearchResults,
                         setEditorVisible = uiState.setEditorVisible,
                         canSaveSet = uiState.canSaveSet,
                         message = uiState.message,
                         onNameChange = onComposeNameChange,
+                        onSelectExercise = onComposeSelectExercise,
+                        onCreateCustomExercise = onComposeCreateCustomExercise,
+                        onBrowseExercises = onBrowseExercises,
                         onNoteChange = onComposeNoteChange,
                         onToggleFields = onToggleComposeFields,
                         onToggleNote = onToggleComposeNote,
@@ -414,7 +588,12 @@ private fun WorkoutPinnedHeader(
                     color = FlowTextPrimary,
                 )
             }
-            FlowTextAction(text = "End", onClick = onEnd)
+            FlowButton(
+                text = "End",
+                onClick = onEnd,
+                variant = FlowButtonVariant.Secondary,
+                fillWidth = false,
+            )
         }
     }
 }
@@ -424,10 +603,15 @@ private fun InlineExerciseComposer(
     draft: ExerciseDraft,
     setDraft: SetDraft,
     weightUnit: WeightUnit,
+    nameSuggestions: List<String>,
+    searchResults: List<com.deepak.flow.core.gym.GymExerciseSearchHit>,
     setEditorVisible: Boolean,
     canSaveSet: Boolean,
     message: String?,
     onNameChange: (String) -> Unit,
+    onSelectExercise: (String, String) -> Unit,
+    onCreateCustomExercise: (String) -> Unit,
+    onBrowseExercises: () -> Unit,
     onNoteChange: (String) -> Unit,
     onToggleFields: () -> Unit,
     onToggleNote: () -> Unit,
@@ -440,10 +624,16 @@ private fun InlineExerciseComposer(
     onStepResistance: (Boolean) -> Unit,
     onStepRounds: (Boolean) -> Unit,
 ) {
-    FlowTextField(
+    ExerciseNameField(
         value = draft.name,
         onValueChange = onNameChange,
-        placeholder = "Exercise title",
+        suggestions = nameSuggestions,
+        searchResults = searchResults,
+        selectedExerciseId = draft.canonicalExerciseId,
+        onSelectExercise = onSelectExercise,
+        onCreateCustomExercise = onCreateCustomExercise,
+        onBrowseExercises = onBrowseExercises,
+        placeholder = "Search exercises...",
     )
     Spacer(modifier = Modifier.height(FlowSpacing.md))
     FlowMetaText(trackingSummary(draft.fields))
@@ -500,9 +690,93 @@ private fun InlineExerciseComposer(
 }
 
 @Composable
+private fun PinnedRestBand(
+    visible: Boolean,
+    remainingLabel: String,
+    restKind: GymRestKind,
+    exerciseName: String?,
+    onSkip: () -> Unit,
+    onMinusTen: () -> Unit,
+    onAddTen: () -> Unit,
+) {
+    val reduceMotion = rememberReduceMotionEnabled()
+    val enterMs = if (reduceMotion) 0 else FlowMotion.STANDARD
+    val exitMs = if (reduceMotion) 0 else FlowMotion.FAST
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(enterMs)) + slideInVertically(tween(enterMs)) { -it / 2 },
+        exit = fadeOut(tween(exitMs)) + slideOutVertically(tween(exitMs)) { -it / 2 },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(FlowSurfaceRaised)
+                .padding(horizontal = FlowSpacing.md, vertical = FlowSpacing.sm),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    FlowSectionLabel("Rest")
+                    Spacer(modifier = Modifier.height(FlowSpacing.xxs))
+                    Text(
+                        text = remainingLabel,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = FlowTextPrimary,
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FlowButton(
+                        text = "−10",
+                        onClick = onMinusTen,
+                        variant = FlowButtonVariant.Secondary,
+                        fillWidth = false,
+                    )
+                    FlowButton(
+                        text = "Skip",
+                        onClick = onSkip,
+                        fillWidth = false,
+                    )
+                    FlowButton(
+                        text = "+10",
+                        onClick = onAddTen,
+                        variant = FlowButtonVariant.Secondary,
+                        fillWidth = false,
+                    )
+                }
+            }
+            if (!exerciseName.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(FlowSpacing.sm))
+                Text(
+                    text = when (restKind) {
+                        GymRestKind.EXERCISE -> "After $exerciseName"
+                        else -> exerciseName
+                    },
+                    style = MaterialTheme.typography.titleMedium,
+                    color = FlowTextPrimary,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ExerciseBlock(
     exercise: GymWorkoutExercise,
-    isActive: Boolean,
+    isFocused: Boolean,
+    isEditable: Boolean,
+    isSelectable: Boolean,
+    isSkipped: Boolean,
+    isActivelyEditing: Boolean,
+    isResting: Boolean,
+    switchEnabled: Boolean,
+    hasFocusedExerciseInSession: Boolean,
     weightUnit: WeightUnit,
     setDraft: SetDraft,
     setEditorVisible: Boolean,
@@ -519,6 +793,8 @@ private fun ExerciseBlock(
     onAddNewSet: () -> Unit,
     onFinishExercise: () -> Unit,
     onSkipExercise: (() -> Unit)?,
+    onUnskipExercise: () -> Unit,
+    onSaveExercise: (() -> Unit)?,
     saveSetLabel: String,
     finishExerciseLabel: String,
     onStepWeight: (Boolean) -> Unit,
@@ -529,35 +805,63 @@ private fun ExerciseBlock(
     showUpNext: Boolean = false,
     upNextExercise: GymWorkoutExercise? = null,
 ) {
+    val progressLabel = GymRestUiPolicy.exerciseProgressLabel(
+        exercise = exercise,
+        isFocused = isFocused,
+        isEditable = isEditable,
+        isActivelyEditing = isActivelyEditing,
+    )
+    val isSwitchTarget = GymWorkoutSwitchPolicy.shouldShowSwitchAction(
+        isFocused = isFocused,
+        isSelectable = isSelectable,
+        hasFocusedExerciseInSession = hasFocusedExerciseInSession,
+        isResting = isResting,
+    )
+    val isSwitchable = isSwitchTarget && switchEnabled
+    val isSwitchBlocked = isSwitchTarget && !switchEnabled
+    val primaryTextColor = if (isSwitchBlocked) FlowTextDisabled else FlowTextPrimary
+    val secondaryTextColor = if (isSwitchBlocked) FlowTextDisabled else FlowTextSecondary
+    val blockModifier = Modifier
+        .fillMaxWidth()
+        .then(
+            if (isSwitchable) {
+                Modifier.clickable(role = Role.Button, onClick = onSelect)
+            } else {
+                Modifier
+            },
+        )
+    Column(modifier = blockModifier) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(
-                if (isActive) {
-                    Modifier.clickable(role = Role.Button, onClick = onSelect)
-                } else {
-                    Modifier
-                },
-            ),
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.weight(1f, fill = true)) {
             Text(
                 text = exercise.name,
                 style = MaterialTheme.typography.titleLarge,
-                color = FlowTextPrimary,
+                color = primaryTextColor,
             )
             Spacer(modifier = Modifier.height(2.dp))
             FlowMetaText(
-                if (exercise.skipped) {
-                    "Skipped"
-                } else {
-                    trackingSummary(exercise.trackingFields)
+                when {
+                    exercise.skipped -> "Skipped"
+                    exercise.completedAtEpochMilli != null -> "Completed"
+                    else -> trackingSummary(exercise.trackingFields)
                 },
+                color = secondaryTextColor,
             )
         }
-        FlowTextAction(text = "Edit", onClick = onEditExercise)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.wrapContentWidth(),
+        ) {
+            if (progressLabel != null) {
+                FlowMetaText(progressLabel, preserveCase = true)
+            }
+            FlowTextAction(text = "Edit", onClick = onEditExercise)
+        }
     }
 
     if (exercise.note.isNotBlank()) {
@@ -567,14 +871,16 @@ private fun ExerciseBlock(
 
     Spacer(modifier = Modifier.height(FlowSpacing.md))
     val savedSets = exercise.sets.filter { it.saved }
-    savedSets.forEach { set ->
+    savedSets.forEachIndexed { setIndex, set ->
         SavedSetRow(
             set = set,
             fields = exercise.trackingFields,
             weightUnit = weightUnit,
-            selected = isActive && setDraft.setId == set.id,
-            canDelete = isActive,
-            onClick = if (isActive) {
+            selected = isFocused && setDraft.setId == set.id,
+            canDelete = isFocused && isEditable && !set.skipped,
+            showDivider = !(setIndex == savedSets.lastIndex && isFocused && isEditable && setEditorVisible),
+            contentMuted = isSwitchBlocked,
+            onClick = if (isFocused && isEditable && !isResting && !set.skipped) {
                 {
                     onSelect()
                     onEditSet(set)
@@ -582,16 +888,16 @@ private fun ExerciseBlock(
             } else {
                 {}
             },
-            onDelete = if (isActive) {
+            onDelete = if (isFocused && isEditable && !isResting && !set.skipped) {
                 { onDeleteSet(set.id) }
             } else {
                 null
             },
-            clickable = isActive,
+            clickable = isFocused && isEditable && !isResting && !set.skipped,
         )
     }
 
-    if (isActive && setEditorVisible) {
+    if (isFocused && isEditable && setEditorVisible) {
         Spacer(modifier = Modifier.height(FlowSpacing.md))
         InlineSetEditor(
             draft = setDraft,
@@ -614,6 +920,14 @@ private fun ExerciseBlock(
             onClick = onSaveSet,
             enabled = canSaveSet,
         )
+        if (onSaveExercise != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.sm))
+            FlowButton(
+                text = "Save Exercise",
+                onClick = onSaveExercise,
+                variant = FlowButtonVariant.Secondary,
+            )
+        }
         if (setDraft.setId != null) {
             Spacer(modifier = Modifier.height(FlowSpacing.sm))
             FlowTextAction(text = "Cancel edit", onClick = onClearEditingSet)
@@ -638,7 +952,7 @@ private fun ExerciseBlock(
         }
     }
 
-    if (isActive && awaitingNextAction) {
+    if (isFocused && isEditable && awaitingNextAction) {
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
         FlowButton(
             text = "Add New Set",
@@ -656,6 +970,12 @@ private fun ExerciseBlock(
             FlowTextAction(text = "Skip Exercise", onClick = onSkipExercise)
         }
     }
+
+    if (isFocused && isSkipped) {
+        Spacer(modifier = Modifier.height(FlowSpacing.lg))
+        FlowTextAction(text = "Unskip Exercise", onClick = onUnskipExercise)
+    }
+    }
 }
 
 @Composable
@@ -668,7 +988,15 @@ private fun SavedSetRow(
     clickable: Boolean = true,
     canDelete: Boolean = false,
     onDelete: (() -> Unit)? = null,
+    showDivider: Boolean = true,
+    contentMuted: Boolean = false,
 ) {
+    val labelColor = when {
+        contentMuted -> FlowTextDisabled
+        selected -> FlowTextPrimary
+        else -> FlowTextSecondary
+    }
+    val valueColor = if (contentMuted) FlowTextDisabled else FlowTextPrimary
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -693,7 +1021,7 @@ private fun SavedSetRow(
             Text(
                 text = "SET ${set.setNumber}",
                 style = MaterialTheme.typography.labelLarge,
-                color = if (selected) FlowTextPrimary else FlowTextSecondary,
+                color = labelColor,
                 modifier = Modifier.then(
                     if (clickable) {
                         Modifier.clickable(role = Role.Button, onClick = onClick)
@@ -706,7 +1034,7 @@ private fun SavedSetRow(
         Text(
             text = GymLogic.formatSetSummary(set, fields, weightUnit),
             style = MaterialTheme.typography.titleMedium,
-            color = FlowTextPrimary,
+            color = valueColor,
             modifier = Modifier.then(
                 if (clickable) {
                     Modifier.clickable(role = Role.Button, onClick = onClick)
@@ -716,7 +1044,9 @@ private fun SavedSetRow(
             ),
         )
     }
-    FlowHairlineDivider()
+    if (showDivider) {
+        FlowHairlineDivider()
+    }
 }
 
 @Composable
@@ -739,55 +1069,52 @@ private fun InlineSetEditor(
     if (hasWeight || hasReps) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
         ) {
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (hasWeight) {
-                    SteppedNumberField(
-                        value = draft.weight,
-                        onValueChange = { value ->
-                            onDraftChange { it.copy(weight = filterDecimal(value)) }
-                        },
-                        onMinus = { onStepWeight(false) },
-                        onPlus = { onStepWeight(true) },
-                        suffix = weightUnit.label.lowercase(),
-                        keyboardType = KeyboardType.Decimal,
-                        inputWidth = 64.dp,
-                    )
-                }
+            if (hasWeight) {
+                SteppedNumberField(
+                    value = draft.weight,
+                    onValueChange = { value ->
+                        onDraftChange { it.copy(weight = filterDecimal(value)) }
+                    },
+                    onMinus = { onStepWeight(false) },
+                    onPlus = { onStepWeight(true) },
+                    suffix = weightUnit.label.lowercase(),
+                    keyboardType = KeyboardType.Decimal,
+                    inputWidth = 72.dp,
+                )
+            } else {
+                Spacer(modifier = Modifier.width(GymActiveStepperTouchTarget))
             }
             if (hasWeight && hasReps) {
                 Box(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .height(GymActiveStepperTouchTarget)
+                        .padding(horizontal = FlowSpacing.xs),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = "×",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         color = FlowTextSecondary,
                     )
                 }
             }
-            Box(
-                modifier = Modifier.weight(1f),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (hasReps) {
-                    SteppedNumberField(
-                        value = draft.reps,
-                        onValueChange = { value ->
-                            onDraftChange { it.copy(reps = filterInt(value)) }
-                        },
-                        onMinus = { onStepReps(false) },
-                        onPlus = { onStepReps(true) },
-                        suffix = "reps",
-                        keyboardType = KeyboardType.Number,
-                        inputWidth = 48.dp,
-                    )
-                }
+            if (hasReps) {
+                SteppedNumberField(
+                    value = draft.reps,
+                    onValueChange = { value ->
+                        onDraftChange { it.copy(reps = filterInt(value)) }
+                    },
+                    onMinus = { onStepReps(false) },
+                    onPlus = { onStepReps(true) },
+                    suffix = "reps",
+                    keyboardType = KeyboardType.Number,
+                    inputWidth = 56.dp,
+                )
+            } else if (hasWeight) {
+                Spacer(modifier = Modifier.width(GymActiveStepperTouchTarget))
             }
         }
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
@@ -913,6 +1240,12 @@ private fun InlineSetEditor(
     }
 }
 
+private val GymActiveStepperTouchTarget = 56.dp
+private val GymActiveStepperIconSize = 28.dp
+
+internal val GymActiveStepperTouchTargetDp = GymActiveStepperTouchTarget
+internal val GymActiveStepperIconSizeDp = GymActiveStepperIconSize
+
 @Composable
 private fun SteppedNumberField(
     value: String,
@@ -923,24 +1256,48 @@ private fun SteppedNumberField(
     keyboardType: KeyboardType,
     inputWidth: Dp,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xxs),
+    val focusManager = LocalFocusManager.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(FlowSpacing.xxs),
     ) {
-        FlowTextAction(text = "−", onClick = onMinus)
-        CompactValueField(
-            value = value,
-            onValueChange = onValueChange,
-            keyboardType = keyboardType,
-            width = inputWidth,
-        )
-        FlowTextAction(text = "+", onClick = onPlus)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
+        ) {
+            FlowIconAction(
+                icon = Icons.Default.Remove,
+                contentDescription = "Decrease",
+                onClick = {
+                    focusManager.clearFocus()
+                    onMinus()
+                },
+                iconSize = GymActiveStepperIconSize,
+                touchTarget = GymActiveStepperTouchTarget,
+            )
+            CompactValueField(
+                value = value,
+                onValueChange = onValueChange,
+                keyboardType = keyboardType,
+                width = inputWidth,
+            )
+            FlowIconAction(
+                icon = Icons.Default.Add,
+                contentDescription = "Increase",
+                onClick = {
+                    focusManager.clearFocus()
+                    onPlus()
+                },
+                iconSize = GymActiveStepperIconSize,
+                touchTarget = GymActiveStepperTouchTarget,
+            )
+        }
         if (!suffix.isNullOrBlank()) {
             Text(
                 text = suffix,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.labelLarge,
                 color = FlowTextSecondary,
-                modifier = Modifier.padding(start = FlowSpacing.xxs),
+                maxLines = 1,
             )
         }
     }
@@ -1048,7 +1405,12 @@ internal fun TrackingFieldChips(
 private fun ExerciseEditorPane(
     draft: ExerciseDraft,
     message: String?,
+    nameSuggestions: List<String>,
+    searchResults: List<com.deepak.flow.core.gym.GymExerciseSearchHit>,
     onNameChange: (String) -> Unit,
+    onSelectExercise: (String, String) -> Unit,
+    onCreateCustomExercise: (String) -> Unit,
+    onBrowseExercises: () -> Unit,
     onNoteChange: (String) -> Unit,
     onToggleField: (TrackingField) -> Unit,
     onToggleFieldsEditor: () -> Unit,
@@ -1068,10 +1430,16 @@ private fun ExerciseEditorPane(
     ) {
         FlowScreenTitle("Edit Exercise")
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
-        FlowTextField(
+        ExerciseNameField(
             value = draft.name,
             onValueChange = onNameChange,
-            placeholder = "Exercise title",
+            suggestions = nameSuggestions,
+            searchResults = searchResults,
+            selectedExerciseId = draft.canonicalExerciseId,
+            onSelectExercise = onSelectExercise,
+            onCreateCustomExercise = onCreateCustomExercise,
+            onBrowseExercises = onBrowseExercises,
+            placeholder = "Search exercises...",
         )
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
         FlowSectionLabel("Tracking")
@@ -1124,120 +1492,6 @@ private fun ExerciseEditorPane(
 }
 
 @Composable
-private fun RestPane(
-    restKind: com.deepak.flow.core.gym.GymRestKind,
-    remainingLabel: String,
-    currentExercise: GymWorkoutExercise?,
-    nextExercise: GymWorkoutExercise?,
-    weightUnit: WeightUnit,
-    onSkip: () -> Unit,
-    onMinusTen: () -> Unit,
-    onAddTen: () -> Unit,
-) {
-    val isExerciseRest = restKind == com.deepak.flow.core.gym.GymRestKind.EXERCISE
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        FlowSectionLabel(if (isExerciseRest) "Exercise Rest" else "Set Rest")
-        Spacer(modifier = Modifier.height(FlowSpacing.xl))
-        Text(
-            text = remainingLabel,
-            style = MaterialTheme.typography.displayLarge.copy(
-                fontSize = 72.sp,
-                lineHeight = 80.sp,
-            ),
-            color = FlowTextPrimary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(modifier = Modifier.height(FlowSpacing.xl))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(
-                space = FlowSpacing.md,
-                alignment = Alignment.CenterHorizontally,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            FlowButton(
-                text = "−10",
-                onClick = onMinusTen,
-                variant = FlowButtonVariant.Secondary,
-                fillWidth = false,
-            )
-            FlowButton(
-                text = "Skip",
-                onClick = onSkip,
-                fillWidth = false,
-            )
-            FlowButton(
-                text = "+10",
-                onClick = onAddTen,
-                variant = FlowButtonVariant.Secondary,
-                fillWidth = false,
-            )
-        }
-        if (isExerciseRest && nextExercise != null) {
-            Spacer(modifier = Modifier.height(FlowSpacing.xxl))
-            FlowHairlineDivider()
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
-            FlowSectionLabel("Next")
-            Spacer(modifier = Modifier.height(FlowSpacing.sm))
-            Text(
-                text = nextExercise.name,
-                style = MaterialTheme.typography.headlineSmall,
-                color = FlowTextPrimary,
-            )
-            if (nextExercise.plannedSetCount > 0) {
-                Spacer(modifier = Modifier.height(FlowSpacing.xs))
-                FlowMetaText("${nextExercise.plannedSetCount} sets")
-            }
-        } else if (!isExerciseRest && currentExercise != null) {
-            Spacer(modifier = Modifier.height(FlowSpacing.xxl))
-            FlowHairlineDivider()
-            Spacer(modifier = Modifier.height(FlowSpacing.lg))
-            FlowSectionLabel("Current exercise")
-            Spacer(modifier = Modifier.height(FlowSpacing.sm))
-            Text(
-                text = currentExercise.name,
-                style = MaterialTheme.typography.headlineSmall,
-                color = FlowTextPrimary,
-            )
-            val saved = currentExercise.sets.filter { it.saved }
-            if (saved.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(FlowSpacing.md))
-                saved.forEach { set ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = FlowSpacing.xs),
-                    ) {
-                        FlowMetaText("Set ${set.setNumber}")
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = GymLogic.formatCompactSetLine(
-                                set,
-                                currentExercise.trackingFields,
-                                weightUnit,
-                            ),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = FlowTextPrimary,
-                        )
-                        if (set.failure) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            FlowMetaText("Failure")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 internal fun NoteToggle(
     expanded: Boolean,
     onToggle: () -> Unit,
@@ -1279,6 +1533,8 @@ internal fun NoteToggle(
 @Composable
 private fun EndOptionsPane(
     stopwatchLabel: String,
+    canCompleteWorkout: Boolean,
+    completionBlockReason: String?,
     onComplete: () -> Unit,
     onDiscard: () -> Unit,
     onContinue: () -> Unit,
@@ -1287,8 +1543,16 @@ private fun EndOptionsPane(
         FlowScreenTitle("End Workout")
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
         FlowSupportingText(stopwatchLabel)
+        if (completionBlockReason != null) {
+            Spacer(modifier = Modifier.height(FlowSpacing.md))
+            FlowSupportingText(completionBlockReason)
+        }
         Spacer(modifier = Modifier.height(FlowSpacing.xl))
-        FlowButton(text = "End & Save", onClick = onComplete)
+        FlowButton(
+            text = "End & Save",
+            onClick = onComplete,
+            enabled = canCompleteWorkout,
+        )
         Spacer(modifier = Modifier.height(FlowSpacing.sm))
         FlowButton(
             text = "Cancel",

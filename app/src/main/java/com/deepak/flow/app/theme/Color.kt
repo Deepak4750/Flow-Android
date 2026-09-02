@@ -31,4 +31,7 @@ val FlowWaterGlow = Color(0xFF4DE8E8)
 val FlowWaterSurface = Color(0xFFA8FFFF)
 /** Crisp silhouette ring so the bottle reads on AMOLED and LCD. */
 val FlowBottleOutline = Color(0xFFD8D8D8)
+/** Inline validation and non-destructive error copy. */
 val FlowError = Color(0xFFE57373)
+/** Delete, discard, and other irreversible actions. */
+val FlowDestructive = Color(0xFFFF4D4D)

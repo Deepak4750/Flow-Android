@@ -121,6 +121,35 @@ class FlowDrawerDestinationTest {
     }
 
     @Test
+    fun featureOffDoesNotBlockOpeningTheDestination() {
+        assertFalse(
+            FlowDrawerDestination.REMINDERS.isEnabled(
+                remindersEnabled = false,
+                waterEnabled = true,
+                gymEnabled = true,
+            ),
+        )
+        assertFalse(
+            FlowDrawerDestination.WATER.isEnabled(
+                remindersEnabled = true,
+                waterEnabled = false,
+                gymEnabled = true,
+            ),
+        )
+        assertFalse(
+            FlowDrawerDestination.GYM.isEnabled(
+                remindersEnabled = true,
+                waterEnabled = true,
+                gymEnabled = false,
+            ),
+        )
+        assertTrue(FlowDrawerDestination.REMINDERS.canNavigate())
+        assertTrue(FlowDrawerDestination.WATER.canNavigate())
+        assertTrue(FlowDrawerDestination.GYM.canNavigate())
+        assertTrue(FlowDrawerDestination.HOME.canNavigate())
+    }
+
+    @Test
     fun switchValueExistsOnTasksWaterAndGym() {
         assertEquals(
             true,

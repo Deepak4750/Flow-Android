@@ -72,6 +72,7 @@ fun AboutScreen(
                 value = formatInstalledVersionLabel(
                     versionName = BuildConfig.VERSION_NAME,
                     versionCode = BuildConfig.VERSION_CODE,
+                    betaIteration = BuildConfig.FLOW_BETA_ITERATION,
                 ),
                 onClick = {
                     if (updateState.previewUnlocked) return@FlowInfoRow

@@ -9,12 +9,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.deepak.flow.app.components.FeatureOffState
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowButtonVariant
 import com.deepak.flow.app.components.FlowHairlineDivider
 import com.deepak.flow.app.components.FlowScreenTitle
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSupportingText
+import com.deepak.flow.app.components.FlowTextAction
 import com.deepak.flow.app.navigation.FlowDrawerDestination
 import com.deepak.flow.app.navigation.FlowShell
 import com.deepak.flow.app.theme.FlowSpacing
@@ -34,6 +36,7 @@ fun GymChoiceScreen(
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onRoutine: () -> Unit,
     onFreeWorkout: () -> Unit,
+    onExerciseLibrary: () -> Unit,
     onContinueWorkout: (GymWorkoutType) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -52,6 +55,18 @@ fun GymChoiceScreen(
         modifier = modifier,
     ) {
         FlowScreenTitle("Gym")
+
+        if (!gymEnabled) {
+            Spacer(modifier = Modifier.height(FlowSpacing.lg))
+            FeatureOffState(
+                title = "Gym is off.",
+                message = "Turn it on when you want it back.",
+                actionLabel = "Turn Gym back on",
+                onTurnBackOn = { onGymEnabledChange(true) },
+                modifier = Modifier.weight(1f),
+            )
+            return@FlowShell
+        }
 
         if (uiState.canContinue) {
             Spacer(modifier = Modifier.height(FlowSpacing.xl))
@@ -81,6 +96,11 @@ fun GymChoiceScreen(
             onClick = onFreeWorkout,
             variant = FlowButtonVariant.Secondary,
             modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(FlowSpacing.md))
+        FlowTextAction(
+            text = "Exercise Library",
+            onClick = onExerciseLibrary,
         )
     }
 }

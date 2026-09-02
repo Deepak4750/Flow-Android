@@ -3,9 +3,7 @@ package com.deepak.flow.core.notification
 import android.content.Context
 import com.deepak.flow.core.gym.GymWorkoutSession
 import com.deepak.flow.core.gym.GymWorkoutStatus
-import com.deepak.flow.core.gym.GymWorkoutType
 import com.deepak.flow.core.repository.GymWorkoutRepository
-import com.deepak.flow.core.widget.WidgetLaunch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -52,37 +50,41 @@ class ActiveWorkoutNotificationController(
     }
 
     private suspend fun tickWhileActive(initial: GymWorkoutSession) {
-        var latest = initial
+        var lastFingerprint: String? = null
         while (currentCoroutineContext().isActive) {
             val fresh = repository.getAnyActiveSession()
             if (fresh == null || fresh.status != GymWorkoutStatus.ACTIVE) {
                 NotificationChannelManager.cancelActiveWorkoutNotification(appContext)
                 return
             }
-            latest = fresh
-            post(latest, System.currentTimeMillis())
-            delay(1_000L)
+            val now = System.currentTimeMillis()
+            val snapshot = ActiveWorkoutNotificationCopy.fromSession(fresh, now)
+            if (snapshot.fingerprint != lastFingerprint) {
+                NotificationChannelManager.postActiveWorkoutNotification(
+                    context = appContext,
+                    snapshot = snapshot,
+                )
+                lastFingerprint = snapshot.fingerprint
+            }
+            delay(if (snapshot.isResting) 1_000L else 3_000L)
         }
     }
 
+    /** Clears an active rest timer from a notification action without touching the rest-complete alert path. */
+    suspend fun skipRestIfActive(workoutId: Long) {
+        val session = repository.getAnyActiveSession() ?: return
+        if (session.id != workoutId) return
+        if (session.restEndsAtEpochMilli == null) return
+        repository.cancelScheduledRestAlert()
+        repository.clearRest(session.id)
+        restoreIfActive()
+    }
+
     private fun post(session: GymWorkoutSession, nowEpochMilli: Long) {
-        val exercises = session.exercises
-        val current = if (exercises.isEmpty()) {
-            null
-        } else {
-            exercises[session.currentExerciseIndex.coerceIn(0, exercises.lastIndex)]
-        }
+        val snapshot = ActiveWorkoutNotificationCopy.fromSession(session, nowEpochMilli)
         NotificationChannelManager.postActiveWorkoutNotification(
             context = appContext,
-            exerciseName = current?.name,
-            workoutStartedAtEpochMilli = session.startedAtEpochMilli,
-            exerciseStartedAtEpochMilli = session.currentExerciseStartedAtEpochMilli,
-            nowEpochMilli = nowEpochMilli,
-            destination = if (session.type == GymWorkoutType.ROUTINE) {
-                WidgetLaunch.DEST_GYM_ROUTINE_WORKOUT
-            } else {
-                WidgetLaunch.DEST_GYM_FREE_WORKOUT
-            },
+            snapshot = snapshot,
         )
     }
 }

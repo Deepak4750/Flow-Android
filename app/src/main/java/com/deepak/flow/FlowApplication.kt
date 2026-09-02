@@ -6,6 +6,11 @@ import com.deepak.flow.core.backup.KeepDataStore
 import com.deepak.flow.core.database.FlowDatabase
 import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.notification.ActiveWorkoutNotificationController
+import com.deepak.flow.core.notification.AndroidGymRestAlerter
+import com.deepak.flow.core.notification.AndroidWorkoutEventNotifier
+import com.deepak.flow.core.notification.GymRestAlarmCoordinator
+import com.deepak.flow.core.notification.GymRestAlarmPort
+import com.deepak.flow.core.notification.GymRestAlarmRequest
 import com.deepak.flow.core.notification.NotificationChannelManager
 import com.deepak.flow.core.notification.NotificationScheduler
 import com.deepak.flow.core.repository.GymWorkoutRepository
@@ -92,6 +97,13 @@ class FlowApplication : Application() {
                 FlowDatabase.MIGRATION_26_27,
                 FlowDatabase.MIGRATION_27_28,
                 FlowDatabase.MIGRATION_28_29,
+                FlowDatabase.MIGRATION_29_30,
+                FlowDatabase.MIGRATION_30_31,
+                FlowDatabase.MIGRATION_31_32,
+                FlowDatabase.MIGRATION_32_33,
+                FlowDatabase.MIGRATION_33_34,
+                FlowDatabase.MIGRATION_34_35,
+                FlowDatabase.MIGRATION_35_36,
             )
             .build()
 
@@ -99,6 +111,7 @@ class FlowApplication : Application() {
         reminderRepository = ReminderRepositoryImpl(
             dao = database.reminderDao(),
             completionDao = database.reminderCompletionDao(),
+            occurrenceDao = database.reminderOccurrenceDao(),
             notificationScheduler = notificationScheduler,
             onDataChanged = { com.deepak.flow.core.widget.FlowWidgets.refresh(this) },
         )
@@ -109,7 +122,22 @@ class FlowApplication : Application() {
         gymWorkoutRepository = GymWorkoutRepositoryImpl(
             dao = database.gymWorkoutDao(),
             routineDao = database.gymRoutineDao(),
+            customExerciseDao = database.gymCustomExerciseDao(),
+            exerciseOverrideDao = database.gymExerciseOverrideDao(),
             profileDao = database.userProfileDao(),
+            workoutEvents = AndroidWorkoutEventNotifier(this),
+            gymRestAlarms = GymRestAlarmCoordinator(
+                alarms = object : GymRestAlarmPort {
+                    override fun schedule(request: GymRestAlarmRequest) {
+                        notificationScheduler.scheduleGymRest(request)
+                    }
+
+                    override fun cancel() {
+                        notificationScheduler.cancelGymRest()
+                    }
+                },
+                alerter = AndroidGymRestAlerter(this),
+            ),
         )
         historyRepository = HistoryRepositoryImpl(
             historyDao = database.historyDao(),

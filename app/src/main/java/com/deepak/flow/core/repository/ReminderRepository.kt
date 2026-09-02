@@ -15,4 +15,5 @@ interface ReminderRepository {
     suspend fun cancelAllScheduledReminders()
     fun observeTodayCompletions(dateEpochDay: Long): Flow<Set<Long>>
     suspend fun setTodayCompletion(reminderId: Long, dateEpochDay: Long, completed: Boolean)
+    suspend fun recordOccurrenceDelivery(reminderId: Long, scheduledAtEpochMilli: Long): Reminder?
 }

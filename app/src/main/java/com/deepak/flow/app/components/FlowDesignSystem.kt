@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,9 +60,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -91,6 +94,7 @@ import com.deepak.flow.core.model.isDotMatrixCellFilled
 import com.deepak.flow.app.theme.FlowBlack
 import com.deepak.flow.app.theme.FlowBorder
 import com.deepak.flow.app.theme.FlowBorderStrong
+import com.deepak.flow.app.theme.FlowDestructive
 import com.deepak.flow.app.theme.FlowError
 import com.deepak.flow.app.theme.FlowMotion
 import com.deepak.flow.app.theme.FlowPressed
@@ -272,9 +276,10 @@ fun FlowMetaText(
     text: String,
     modifier: Modifier = Modifier,
     color: Color = FlowTextTertiary,
+    preserveCase: Boolean = false,
 ) {
     Text(
-        text = text.uppercase(),
+        text = if (preserveCase) text else text.uppercase(),
         style = MaterialTheme.typography.labelMedium,
         color = color,
         maxLines = 1,
@@ -328,7 +333,10 @@ fun FlowSwipeDeleteRow(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     resetKey: Int = 0,
+    swipeEnabled: Boolean = true,
+    dragFloatingActive: Boolean = false,
     onContentClick: (() -> Unit)? = null,
+    onRevealed: (() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     content: @Composable () -> Unit,
 ) {
@@ -343,11 +351,39 @@ fun FlowSwipeDeleteRow(
     val offsetAnim = remember { Animatable(0f) }
     var revealed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val floatingActive by rememberUpdatedState(dragFloatingActive)
+    val swipeAllowed by rememberUpdatedState(swipeEnabled && !dragFloatingActive)
 
     LaunchedEffect(resetKey) {
         offsetAnim.snapTo(0f)
         revealed = false
     }
+
+    LaunchedEffect(dragFloatingActive) {
+        if (dragFloatingActive) {
+            offsetAnim.snapTo(0f)
+            revealed = false
+        }
+    }
+
+    LaunchedEffect(swipeEnabled) {
+        if (!swipeEnabled) {
+            offsetAnim.snapTo(0f)
+            revealed = false
+        }
+    }
+
+    LaunchedEffect(revealed) {
+        if (revealed) {
+            onRevealed?.invoke()
+        }
+    }
+
+    val offsetX = when {
+        floatingActive || !swipeAllowed -> 0f
+        else -> offsetAnim.value
+    }
+    val deleteVisible = swipeAllowed && !floatingActive && (revealed || offsetX < -1f)
 
     Box(
         modifier = modifier
@@ -357,9 +393,10 @@ fun FlowSwipeDeleteRow(
         Row(
             modifier = Modifier
                 .matchParentSize()
+                .graphicsLayer { alpha = if (deleteVisible) 1f else 0f }
                 .background(FlowSurface)
                 .clickable(
-                    enabled = revealed,
+                    enabled = revealed && swipeAllowed && !floatingActive,
                     role = Role.Button,
                     onClick = onDelete,
                 )
@@ -370,13 +407,19 @@ fun FlowSwipeDeleteRow(
             Text(
                 text = "Delete",
                 style = MaterialTheme.typography.labelLarge,
-                color = FlowError,
+                color = FlowDestructive,
             )
         }
         val contentModifier = Modifier
-            .offset { IntOffset(offsetAnim.value.roundToInt(), 0) }
+            .offset { IntOffset(offsetX.roundToInt(), 0) }
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                if (floatingActive) {
+                    FlowSurfaceRaised
+                } else {
+                    MaterialTheme.colorScheme.background
+                },
+            )
             .then(
                 if (onContentClick != null) {
                     Modifier.clickable(
@@ -388,45 +431,112 @@ fun FlowSwipeDeleteRow(
                     Modifier
                 },
             )
-            .pointerInput(revealWidthPx) {
-                detectHorizontalDragGestures(
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        scope.launch {
-                            val next = (offsetAnim.value + dragAmount)
-                                .coerceIn(-revealWidthPx, 0f)
-                            offsetAnim.snapTo(next)
-                        }
-                    },
-                    onDragEnd = {
-                        scope.launch {
-                            if (-offsetAnim.value >= thresholdPx) {
-                                offsetAnim.animateTo(
-                                    targetValue = -revealWidthPx,
-                                    animationSpec = spring(
-                                        stiffness = 400f,
-                                        dampingRatio = 0.82f,
-                                    ),
-                                )
-                                revealed = true
-                            } else {
-                                offsetAnim.animateTo(
-                                    targetValue = 0f,
-                                    animationSpec = spring(
-                                        stiffness = 400f,
-                                        dampingRatio = 0.82f,
-                                    ),
-                                )
-                                revealed = false
+            .then(
+                Modifier.pointerInput(revealWidthPx) {
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            if (!swipeAllowed) return@detectHorizontalDragGestures
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            if (!swipeAllowed) return@detectHorizontalDragGestures
+                            change.consume()
+                            scope.launch {
+                                val next = (offsetAnim.value + dragAmount)
+                                    .coerceIn(-revealWidthPx, 0f)
+                                offsetAnim.snapTo(next)
                             }
-                        }
-                    },
-                )
-            }
+                        },
+                        onDragEnd = {
+                            if (!swipeAllowed) return@detectHorizontalDragGestures
+                            scope.launch {
+                                if (-offsetAnim.value >= thresholdPx) {
+                                    offsetAnim.animateTo(
+                                        targetValue = -revealWidthPx,
+                                        animationSpec = spring(
+                                            stiffness = 400f,
+                                            dampingRatio = 0.82f,
+                                        ),
+                                    )
+                                    revealed = true
+                                } else {
+                                    offsetAnim.animateTo(
+                                        targetValue = 0f,
+                                        animationSpec = spring(
+                                            stiffness = 400f,
+                                            dampingRatio = 0.82f,
+                                        ),
+                                    )
+                                    revealed = false
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            if (!swipeAllowed) return@detectHorizontalDragGestures
+                        },
+                    )
+                },
+            )
             .padding(contentPadding)
         Column(modifier = contentModifier) {
             content()
         }
+    }
+}
+
+@Composable
+fun FlowTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    suffix: String = "",
+    singleLine: Boolean = true,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    minLines: Int = 1,
+) {
+    val fieldStyle = MaterialTheme.typography.titleLarge.copy(color = FlowTextPrimary)
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = FlowSizes.touchTarget),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                textStyle = fieldStyle,
+                singleLine = singleLine,
+                minLines = minLines,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                cursorBrush = SolidColor(FlowWhite),
+                decorationBox = { inner ->
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        if (value.text.isEmpty() && placeholder.isNotEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = fieldStyle.copy(color = FlowTextDisabled),
+                                maxLines = if (singleLine) 1 else minLines,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        inner()
+                    }
+                },
+            )
+            if (suffix.isNotEmpty()) {
+                Text(
+                    text = suffix,
+                    style = fieldStyle,
+                    color = FlowTextSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.padding(start = FlowSpacing.xxs),
+                )
+            }
+        }
+        FlowHairlineDivider()
     }
 }
 
@@ -585,11 +695,12 @@ fun FlowTextAction(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     destructive: Boolean = false,
+    preserveCase: Boolean = false,
 ) {
     val haptic = LocalHapticFeedback.current
     val color = when {
         !enabled -> FlowTextDisabled
-        destructive -> FlowError
+        destructive -> FlowDestructive
         else -> FlowTextPrimary
     }
     Box(
@@ -603,12 +714,12 @@ fun FlowTextAction(
                     onClick()
                 },
             )
-            .defaultMinSize(minHeight = FlowSizes.touchTarget)
-            .padding(vertical = FlowSpacing.xs),
-        contentAlignment = Alignment.CenterStart,
+            .defaultMinSize(minWidth = FlowSizes.touchTarget, minHeight = FlowSizes.touchTarget)
+            .padding(horizontal = FlowSpacing.sm, vertical = FlowSpacing.xs),
+        contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = text.uppercase(),
+            text = if (preserveCase) text else text.uppercase(),
             style = MaterialTheme.typography.labelLarge,
             color = color,
             maxLines = 1,
@@ -626,11 +737,12 @@ fun FlowIconAction(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     iconSize: Dp = FlowSizes.iconMd,
+    touchTarget: Dp = FlowSizes.touchTarget,
 ) {
     val haptic = LocalHapticFeedback.current
     Box(
         modifier = modifier
-            .size(FlowSizes.touchTarget)
+            .size(touchTarget)
             .clip(CircleShape)
             .clickable(
                 enabled = enabled,
@@ -917,6 +1029,13 @@ private val StepperValueWidth = 56.dp
  * When [allowBelowMinWhileEditing] is true, clearing the field lands on 0 while
  * focused (cursor stays after the 0). Done keeps the keyboard open at 0; losing
  * focus commits at least [min].
+ *
+ * When [deferMinClampWhileEditing] is true, the field may stay empty or below
+ * [min] while focused. Values commit on blur or Done, normalized to at least [min].
+ *
+ * When [rejectBelowMinCommit] is true with [deferMinClampWhileEditing], empty or
+ * below-[min] values are rejected on blur/Done instead of clamped. Use for
+ * Settings rest timers where invalid values must block leaving.
  */
 @Composable
 fun FlowStepper(
@@ -931,6 +1050,10 @@ fun FlowStepper(
     max: Int,
     modifier: Modifier = Modifier,
     allowBelowMinWhileEditing: Boolean = false,
+    deferMinClampWhileEditing: Boolean = false,
+    rejectBelowMinCommit: Boolean = false,
+    onEditingTextChange: (String) -> Unit = {},
+    onCommitRejected: () -> Unit = {},
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -941,23 +1064,54 @@ fun FlowStepper(
     }
 
     LaunchedEffect(value, focused) {
-        if (!focused || field.text != value.toString()) {
+        if (!focused) {
             val text = value.toString()
-            // Keep the caret after the digits so backspace-to-0 does not jump
-            // the cursor in front of the zero.
             field = TextFieldValue(text, TextRange(text.length))
         }
     }
 
-    fun commitAtLeastMin() {
+    fun commitDeferredMin(): Boolean {
+        val raw = field.text
+        if (rejectBelowMinCommit &&
+            !com.deepak.flow.core.gym.GymRestSecondsInput.isValidForSettingsLeave(raw, min, max)
+        ) {
+            onCommitRejected()
+            return false
+        }
+        val committed = when {
+            deferMinClampWhileEditing -> com.deepak.flow.core.gym.GymRestSecondsInput.commit(raw, min, max)
+            allowBelowMinWhileEditing && raw.isEmpty() -> min
+            else -> value.coerceIn(min, max)
+        }
+        val text = committed.toString()
+        field = TextFieldValue(text, TextRange(text.length))
+        onValueChange(text)
+        return true
+    }
+
+    fun commitAtLeastMin(): Boolean {
+        if (deferMinClampWhileEditing) {
+            return commitDeferredMin()
+        }
         val committed = value.coerceIn(min, max)
         if (committed != value) {
             onValueChange(committed.toString())
+        }
+        return true
+    }
+
+    fun notifyEditingText(text: String) {
+        if (deferMinClampWhileEditing || rejectBelowMinCommit) {
+            onEditingTextChange(text)
         }
     }
 
     fun publishDigits(digits: String) {
         when {
+            digits.isEmpty() && deferMinClampWhileEditing && focused -> {
+                field = TextFieldValue("", TextRange(0))
+                notifyEditingText("")
+            }
             digits.isEmpty() && allowBelowMinWhileEditing -> {
                 field = TextFieldValue("0", TextRange(1))
                 onValueChange("0")
@@ -965,14 +1119,20 @@ fun FlowStepper(
             digits.isEmpty() -> Unit
             else -> {
                 val parsed = digits.toIntOrNull() ?: return
-                val clamped = if (allowBelowMinWhileEditing && focused) {
-                    parsed.coerceIn(0, max)
+                if (deferMinClampWhileEditing && focused) {
+                    val text = parsed.coerceIn(0, max).toString()
+                    field = TextFieldValue(text, TextRange(text.length))
+                    notifyEditingText(text)
                 } else {
-                    parsed.coerceIn(min, max)
+                    val clamped = if (allowBelowMinWhileEditing && focused) {
+                        parsed.coerceIn(0, max)
+                    } else {
+                        parsed.coerceIn(min, max)
+                    }
+                    val text = clamped.toString()
+                    field = TextFieldValue(text, TextRange(text.length))
+                    onValueChange(text)
                 }
-                val text = clamped.toString()
-                field = TextFieldValue(text, TextRange(text.length))
-                onValueChange(text)
             }
         }
     }
@@ -989,9 +1149,12 @@ fun FlowStepper(
             FlowIconAction(
                 icon = Icons.Default.Remove,
                 contentDescription = "Decrease $valueDescription",
-                onClick = onDecrement,
+                onClick = {
+                    focusManager.clearFocus()
+                    onDecrement()
+                },
                 enabled = value > min,
-                iconSize = FlowSizes.iconSm,
+                iconSize = FlowSizes.iconMd,
             )
             Box(
                 modifier = Modifier
@@ -1015,8 +1178,15 @@ fun FlowStepper(
                                 val text = field.text
                                 field = TextFieldValue(text, TextRange(text.length))
                             }
-                            if (wasFocused && !state.isFocused && allowBelowMinWhileEditing) {
-                                commitAtLeastMin()
+                            if (wasFocused && !state.isFocused &&
+                                (allowBelowMinWhileEditing || deferMinClampWhileEditing)
+                            ) {
+                                if (!commitAtLeastMin()) {
+                                    focusRequester.requestFocus()
+                                }
+                            }
+                            if (state.isFocused) {
+                                notifyEditingText(field.text)
                             }
                         },
                     textStyle = MaterialTheme.typography.headlineMedium.copy(
@@ -1030,7 +1200,14 @@ fun FlowStepper(
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = {
-                            if (allowBelowMinWhileEditing && value < min) {
+                            if (deferMinClampWhileEditing) {
+                                if (commitDeferredMin()) {
+                                    focusManager.clearFocus()
+                                } else {
+                                    focusRequester.requestFocus()
+                                    keyboard?.show()
+                                }
+                            } else if (allowBelowMinWhileEditing && value < min) {
                                 focusRequester.requestFocus()
                                 keyboard?.show()
                             } else {
@@ -1049,9 +1226,12 @@ fun FlowStepper(
             FlowIconAction(
                 icon = Icons.Default.Add,
                 contentDescription = "Increase $valueDescription",
-                onClick = onIncrement,
+                onClick = {
+                    focusManager.clearFocus()
+                    onIncrement()
+                },
                 enabled = value < max,
-                iconSize = FlowSizes.iconSm,
+                iconSize = FlowSizes.iconMd,
             )
         }
     }
@@ -1266,7 +1446,7 @@ fun FlowDrawerItem(
             modifier = Modifier
                 .weight(1f)
                 .clickable(
-                    enabled = enabled,
+                    enabled = true,
                     role = Role.Tab,
                     onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -1467,5 +1647,22 @@ fun FlowSelectorRow(
             style = MaterialTheme.typography.bodyLarge,
             color = FlowTextPrimary,
         )
+    }
+}
+
+@Composable
+fun rememberReduceMotionEnabled(): Boolean {
+    val context = LocalContext.current
+    return remember(context) {
+        android.provider.Settings.Global.getFloat(
+            context.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f ||
+            android.provider.Settings.Global.getFloat(
+                context.contentResolver,
+                android.provider.Settings.Global.TRANSITION_ANIMATION_SCALE,
+                1f,
+            ) == 0f
     }
 }

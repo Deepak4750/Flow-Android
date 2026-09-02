@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -105,6 +106,7 @@ fun HistoryScreen(
     onGymEnabledChange: (Boolean) -> Unit,
     onDestinationClick: (FlowDrawerDestination) -> Unit,
     onDayClick: (Long) -> Unit,
+    onExpiredTaskClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -130,22 +132,32 @@ fun HistoryScreen(
         Spacer(modifier = Modifier.height(FlowSpacing.lg))
         when (uiState.mode) {
             HistoryMainMode.CALENDAR -> {
-                HistoryMonthCalendar(
-                    yearMonth = uiState.calendar.yearMonth,
-                    activityDays = uiState.calendar.activityDays,
-                    completionDots = uiState.calendar.completionDots,
-                    todayEpochDay = uiState.calendar.todayEpochDay,
-                    earliestEpochDay = uiState.calendar.earliestEpochDay,
-                    latestEpochDay = uiState.calendar.latestEpochDay,
-                    canGoPreviousMonth = uiState.calendar.canGoPreviousMonth,
-                    canGoNextMonth = uiState.calendar.canGoNextMonth,
-                    onPreviousMonth = viewModel::goToPreviousMonth,
-                    onNextMonth = viewModel::goToNextMonth,
-                    onDayClick = onDayClick,
+                Column(
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState()),
-                )
+                ) {
+                    HistoryMonthCalendar(
+                        yearMonth = uiState.calendar.yearMonth,
+                        activityDays = uiState.calendar.activityDays,
+                        completionDots = uiState.calendar.completionDots,
+                        todayEpochDay = uiState.calendar.todayEpochDay,
+                        earliestEpochDay = uiState.calendar.earliestEpochDay,
+                        latestEpochDay = uiState.calendar.latestEpochDay,
+                        canGoPreviousMonth = uiState.calendar.canGoPreviousMonth,
+                        canGoNextMonth = uiState.calendar.canGoNextMonth,
+                        onPreviousMonth = viewModel::goToPreviousMonth,
+                        onNextMonth = viewModel::goToNextMonth,
+                        onDayClick = onDayClick,
+                    )
+                    if (remindersEnabled && uiState.expiredTasks.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(FlowSpacing.xl))
+                        HistoryExpiredTasksSection(
+                            tasks = uiState.expiredTasks,
+                            onTaskClick = onExpiredTaskClick,
+                        )
+                    }
+                }
             }
             HistoryMainMode.GRAPHS -> {
                 HistoryGraphsPane(
@@ -156,6 +168,41 @@ fun HistoryScreen(
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState()),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryExpiredTasksSection(
+    tasks: List<HistoryExpiredTaskItem>,
+    onTaskClick: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = "Expired tasks",
+            style = MaterialTheme.typography.titleMedium,
+            color = FlowTextPrimary,
+        )
+        Spacer(modifier = Modifier.height(FlowSpacing.sm))
+        tasks.forEach { task ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onTaskClick(task.id) }
+                    .padding(vertical = FlowSpacing.sm),
+            ) {
+                Text(
+                    text = task.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = FlowTextPrimary,
+                )
+                Text(
+                    text = task.subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = FlowTextSecondary,
                 )
             }
         }
@@ -377,12 +424,10 @@ private fun HistoryFixedWidthBarChart(
                     barColor = barColor,
                     barWidthFraction = 0.91f,
                     gestureKey = index,
-                    onLongPressSelect = {
-                        tooltipIndex = index
+                    onTapSelect = {
+                        tooltipIndex = if (tooltipIndex == index) null else index
                     },
-                    onLongPressRelease = {
-                        tooltipIndex = null
-                    },
+                    onTapRelease = {},
                 )
                 Spacer(modifier = Modifier.height(FlowSpacing.xs))
                 Text(
@@ -454,12 +499,10 @@ private fun HistoryDailyScrollableBarChart(
                                 barColor = barColor,
                                 barWidthFraction = 0.78f,
                                 gestureKey = index,
-                                onLongPressSelect = {
-                                    tooltipIndex = index
+                                onTapSelect = {
+                                    tooltipIndex = if (tooltipIndex == index) null else index
                                 },
-                                onLongPressRelease = {
-                                    tooltipIndex = null
-                                },
+                                onTapRelease = {},
                             )
                         }
                         Spacer(modifier = Modifier.height(FlowSpacing.xs))
@@ -579,27 +622,15 @@ private fun HistoryGraphBarCanvas(
     barColor: Color,
     barWidthFraction: Float,
     gestureKey: Any,
-    onLongPressSelect: () -> Unit,
-    onLongPressRelease: () -> Unit,
+    onTapSelect: () -> Unit,
+    onTapRelease: () -> Unit,
 ) {
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
             .height(120.dp)
             .pointerInput(gestureKey) {
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
-                    val upBeforeLongPress = withTimeoutOrNull(
-                        viewConfiguration.longPressTimeoutMillis,
-                    ) {
-                        waitForUpOrCancellation()
-                    }
-                    if (upBeforeLongPress == null) {
-                        onLongPressSelect()
-                        waitForUpOrCancellation()
-                        onLongPressRelease()
-                    }
-                }
+                detectTapGestures(onTap = { onTapSelect() })
             },
     ) {
         val barWidth = size.width * barWidthFraction

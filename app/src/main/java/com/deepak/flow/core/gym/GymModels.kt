@@ -111,6 +111,7 @@ data class GymRoutineExercise(
     val id: Long = 0L,
     val dayId: Long = 0L,
     val stableKey: String = "",
+    val exerciseId: String = "",
     val name: String,
     val trackingFields: Set<TrackingField> = setOf(TrackingField.WEIGHT, TrackingField.REPS),
     val sortOrder: Int = 0,

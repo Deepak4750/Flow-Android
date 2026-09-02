@@ -32,6 +32,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +55,7 @@ import com.deepak.flow.app.components.FlowOptionSheet
 import com.deepak.flow.app.components.FlowScreenHeader
 import com.deepak.flow.app.components.FlowScreenHeading
 import com.deepak.flow.app.components.FlowSectionBreak
+import com.deepak.flow.app.components.FlowStepper
 import com.deepak.flow.app.components.FlowSectionLabel
 import com.deepak.flow.app.components.FlowSelectorRow
 import com.deepak.flow.app.components.FlowTextAction
@@ -78,6 +80,11 @@ fun CreateReminderScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    LaunchedEffect(uiState.reminderNotFound) {
+        if (uiState.reminderNotFound) onBack()
+    }
+
     val uses24Hour = remember(context) { DateFormat.is24HourFormat(context) }
     val timeFormatter = remember(uses24Hour) { flowTimeFormatter(uses24Hour) }
     val dateFormatter = remember { DateTimeFormatter.ofPattern("d MMM yyyy") }
@@ -414,13 +421,41 @@ private fun AdvancedSection(
             Spacer(modifier = Modifier.height(FlowSpacing.lg))
         }
 
-        FlowToggleRow(
-            label = "End date",
-            supporting = "Stop repeating after a day",
-            checked = uiState.endDateEnabled,
-            onCheckedChange = viewModel::setEndDateEnabled,
+        FlowFieldHeading(
+            label = "Expiration",
+            supporting = "When this task should stop",
         )
-        AnimatedReveal(visible = uiState.endDateEnabled) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(FlowSpacing.xs),
+        ) {
+            FlowChip(
+                label = "No end",
+                selected = uiState.expirationMode == com.deepak.flow.core.model.ReminderExpirationMode.NONE,
+                onClick = {
+                    viewModel.setExpirationMode(com.deepak.flow.core.model.ReminderExpirationMode.NONE)
+                },
+            )
+            FlowChip(
+                label = "End date",
+                selected = uiState.expirationMode == com.deepak.flow.core.model.ReminderExpirationMode.END_DATE,
+                onClick = {
+                    viewModel.setExpirationMode(com.deepak.flow.core.model.ReminderExpirationMode.END_DATE)
+                },
+            )
+            FlowChip(
+                label = "After",
+                selected = uiState.expirationMode == com.deepak.flow.core.model.ReminderExpirationMode.OCCURRENCE_LIMIT,
+                onClick = {
+                    viewModel.setExpirationMode(com.deepak.flow.core.model.ReminderExpirationMode.OCCURRENCE_LIMIT)
+                },
+            )
+        }
+        AnimatedReveal(
+            visible = uiState.expirationMode == com.deepak.flow.core.model.ReminderExpirationMode.END_DATE,
+        ) {
             Column {
                 Spacer(modifier = Modifier.height(FlowSpacing.xs))
                 FlowSelectorRow(
@@ -433,6 +468,24 @@ private fun AdvancedSection(
                             onDate = viewModel::updateEndDate,
                         )
                     },
+                )
+            }
+        }
+        AnimatedReveal(
+            visible = uiState.expirationMode == com.deepak.flow.core.model.ReminderExpirationMode.OCCURRENCE_LIMIT,
+        ) {
+            Column {
+                Spacer(modifier = Modifier.height(FlowSpacing.xs))
+                FlowStepper(
+                    label = "Occurrences",
+                    value = uiState.occurrenceLimit,
+                    unitLabel = if (uiState.occurrenceLimit == 1) "time" else "times",
+                    valueDescription = "occurrence limit",
+                    onValueChange = viewModel::updateOccurrenceLimitInput,
+                    onIncrement = viewModel::incrementOccurrenceLimit,
+                    onDecrement = viewModel::decrementOccurrenceLimit,
+                    min = CreateReminderViewModel.OCCURRENCE_LIMIT_MIN,
+                    max = CreateReminderViewModel.OCCURRENCE_LIMIT_MAX,
                 )
             }
         }
@@ -450,41 +503,45 @@ private fun AdvancedSection(
             singleLine = false,
         )
 
-        Spacer(modifier = Modifier.height(FlowSpacing.lg))
-        FlowToggleRow(
-            label = "Active hours",
-            supporting = "Only remind me while I'm awake",
-            checked = uiState.activeHoursEnabled,
-            onCheckedChange = viewModel::setActiveHoursEnabled,
-        )
-        AnimatedReveal(visible = uiState.activeHoursEnabled) {
+        AnimatedReveal(visible = uiState.showActiveHours) {
             Column {
-                Spacer(modifier = Modifier.height(FlowSpacing.xs))
-                FlowSelectorRow(
-                    label = "From",
-                    value = uiState.activeHoursStart.format(timeFormatter),
-                    onClick = {
-                        showTimePicker(
-                            context = context,
-                            time = uiState.activeHoursStart,
-                            uses24Hour = uses24Hour,
-                            onTime = viewModel::updateActiveHoursStart,
-                        )
-                    },
+                Spacer(modifier = Modifier.height(FlowSpacing.lg))
+                FlowToggleRow(
+                    label = "Active hours",
+                    supporting = "Only remind me while I'm awake",
+                    checked = uiState.activeHoursEnabled,
+                    onCheckedChange = viewModel::setActiveHoursEnabled,
                 )
-                FlowHairlineDivider()
-                FlowSelectorRow(
-                    label = "Until",
-                    value = uiState.activeHoursEnd.format(timeFormatter),
-                    onClick = {
-                        showTimePicker(
-                            context = context,
-                            time = uiState.activeHoursEnd,
-                            uses24Hour = uses24Hour,
-                            onTime = viewModel::updateActiveHoursEnd,
+                AnimatedReveal(visible = uiState.activeHoursEnabled) {
+                    Column {
+                        Spacer(modifier = Modifier.height(FlowSpacing.xs))
+                        FlowSelectorRow(
+                            label = "From",
+                            value = uiState.activeHoursStart.format(timeFormatter),
+                            onClick = {
+                                showTimePicker(
+                                    context = context,
+                                    time = uiState.activeHoursStart,
+                                    uses24Hour = uses24Hour,
+                                    onTime = viewModel::updateActiveHoursStart,
+                                )
+                            },
                         )
-                    },
-                )
+                        FlowHairlineDivider()
+                        FlowSelectorRow(
+                            label = "Until",
+                            value = uiState.activeHoursEnd.format(timeFormatter),
+                            onClick = {
+                                showTimePicker(
+                                    context = context,
+                                    time = uiState.activeHoursEnd,
+                                    uses24Hour = uses24Hour,
+                                    onTime = viewModel::updateActiveHoursEnd,
+                                )
+                            },
+                        )
+                    }
+                }
             }
         }
     }

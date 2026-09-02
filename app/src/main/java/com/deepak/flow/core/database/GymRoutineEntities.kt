@@ -40,6 +40,8 @@ data class GymRoutineExerciseEntity(
     val id: Long = 0L,
     val dayId: Long,
     val stableKey: String,
+    /** Canonical exercise identity (built-in or custom). */
+    val exerciseId: String = "",
     val name: String,
     val trackingFields: String = "",
     val sortOrder: Int,

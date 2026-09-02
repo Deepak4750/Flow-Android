@@ -4,6 +4,8 @@ import com.deepak.flow.core.database.UserProfileDao
 import com.deepak.flow.core.database.UserProfileEntity
 import com.deepak.flow.core.database.WaterDayDao
 import com.deepak.flow.core.database.WaterDayEntity
+import com.deepak.flow.core.model.ContextualHints
+import com.deepak.flow.core.model.MenuTutorialStatus
 import com.deepak.flow.core.model.SnoozeSettings
 import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.model.WaterReminderSettings
@@ -324,6 +326,7 @@ class ProfileRepositoryImpl(
             ),
         )
     }
+
 }
 
 private fun UserProfileEntity?.toUpsertEntity(
@@ -359,6 +362,12 @@ private fun UserProfileEntity?.toUpsertEntity(
     keepDataOnUninstall: Boolean = this?.keepDataOnUninstall
         ?: UserProfile.DEFAULT_KEEP_DATA_ON_UNINSTALL,
     activeGymRoutineId: Long? = this?.activeGymRoutineId,
+    menuTutorialStatus: String = this?.menuTutorialStatus
+        ?: MenuTutorialStatus.DEFAULT.name,
+    routineSwipeDeleteHintShown: Boolean = this?.routineSwipeDeleteHintShown
+        ?: ContextualHints.ROUTINE_SWIPE_DELETE_HINT_SHOWN_DEFAULT,
+    builderDaySwipeDeleteHintShown: Boolean = this?.builderDaySwipeDeleteHintShown
+        ?: ContextualHints.BUILDER_DAY_SWIPE_DELETE_HINT_SHOWN_DEFAULT,
 ) = UserProfileEntity(
     displayName = displayName,
     nickname = nickname,
@@ -384,6 +393,9 @@ private fun UserProfileEntity?.toUpsertEntity(
     waterActiveHoursEndMinutes = waterActiveHoursEndMinutes,
     keepDataOnUninstall = keepDataOnUninstall,
     activeGymRoutineId = activeGymRoutineId,
+    menuTutorialStatus = menuTutorialStatus,
+    routineSwipeDeleteHintShown = routineSwipeDeleteHintShown,
+    builderDaySwipeDeleteHintShown = builderDaySwipeDeleteHintShown,
 )
 
 private fun UserProfileEntity.toDomain() = UserProfile(
@@ -411,4 +423,9 @@ private fun UserProfileEntity.toDomain() = UserProfile(
     waterActiveHoursEndMinutes = waterActiveHoursEndMinutes,
     keepDataOnUninstall = keepDataOnUninstall,
     activeGymRoutineId = activeGymRoutineId,
+    menuTutorialStatus = MenuTutorialStatus.fromStored(menuTutorialStatus),
+    contextualHints = ContextualHints(
+        routineSwipeDeleteHintShown = routineSwipeDeleteHintShown,
+        builderDaySwipeDeleteHintShown = builderDaySwipeDeleteHintShown,
+    ),
 )

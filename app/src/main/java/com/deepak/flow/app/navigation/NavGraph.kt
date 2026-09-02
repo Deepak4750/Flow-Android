@@ -19,6 +19,12 @@ sealed interface FlowRoute {
     data class EditReminder(val reminderId: Long) : FlowRoute
 
     @Serializable
+    data class ReuseReminder(val reminderId: Long) : FlowRoute
+
+    @Serializable
+    data class HistoryExpiredReminder(val reminderId: Long) : FlowRoute
+
+    @Serializable
     data object Water : FlowRoute
 
     @Serializable
@@ -35,6 +41,9 @@ sealed interface FlowRoute {
 
     @Serializable
     data object GymFreeWorkout : FlowRoute
+
+    @Serializable
+    data object GymExerciseLibrary : FlowRoute
 
     @Serializable
     data object GymRoutineWorkout : FlowRoute
@@ -91,6 +100,9 @@ fun FlowDrawerDestination.isEnabled(
     FlowDrawerDestination.GYM -> gymEnabled
     else -> true
 }
+
+/** Feature rows stay openable when off so the recovery screen can be reached. */
+fun FlowDrawerDestination.canNavigate(): Boolean = true
 
 fun FlowDrawerDestination.featureChecked(
     remindersEnabled: Boolean,

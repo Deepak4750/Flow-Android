@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import kotlin.math.roundToInt
 import com.deepak.flow.app.components.AnimatedReveal
+import com.deepak.flow.app.components.FeatureOffState
 import com.deepak.flow.app.components.FlowButton
 import com.deepak.flow.app.components.FlowButtonVariant
 import com.deepak.flow.app.components.FlowChip
@@ -154,7 +155,9 @@ fun WaterScreen(
                 Spacer(modifier = Modifier.height(FlowSpacing.lg))
                 FeatureOffState(
                     title = "H₂O is off.",
-                    message = "Turn it on from the menu when you want it back.",
+                    message = "Turn it on when you want it back.",
+                    actionLabel = "Turn H₂O back on",
+                    onTurnBackOn = { onWaterEnabledChange(true) },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -807,32 +810,6 @@ private fun ColumnScope.BottlePreview(selectedIndex: Int?) {
             progress = 0.5f,
             modifier = Modifier.fillMaxSize(),
         )
-    }
-}
-
-@Composable
-private fun FeatureOffState(
-    title: String,
-    message: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleLarge,
-                color = FlowTextPrimary,
-            )
-            Spacer(modifier = Modifier.height(FlowSpacing.xxs))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = FlowTextSecondary,
-            )
-        }
     }
 }
 

@@ -1,13 +1,14 @@
 package com.deepak.flow.feature.gym.presentation
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.deepak.flow.FlowApplication
-import com.deepak.flow.core.gym.GymLogic
 import com.deepak.flow.core.gym.GymRoutine
+import com.deepak.flow.core.gym.RoutineDeleteDecision
+import com.deepak.flow.core.gym.RoutineDeleteLogic
+import com.deepak.flow.core.repository.GymWorkoutRepository
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,13 +36,19 @@ data class RoutineCatalogUiState(
     val isEmpty: Boolean get() = starred.isEmpty() && others.isEmpty()
 }
 
-class RoutineCatalogViewModel(
-    application: Application,
-) : AndroidViewModel(application) {
+internal interface RoutineCatalogStore {
+    fun observeRoutines(): Flow<List<GymRoutine>>
+    suspend fun getRoutine(routineId: Long): GymRoutine?
+    suspend fun setRoutineStarred(routineId: Long, starred: Boolean)
+    suspend fun isRoutineInActiveWorkout(routineId: Long): Boolean
+    suspend fun deleteRoutine(routineId: Long)
+}
 
-    private val repository = (application as FlowApplication).gymWorkoutRepository
+class RoutineCatalogViewModel internal constructor(
+    private val store: RoutineCatalogStore,
+) : ViewModel() {
 
-    private val catalogState = repository.observeRoutines()
+    private val catalogState = store.observeRoutines()
         .map { routines -> routines.toCatalogState() }
 
     private val _overlayState = MutableStateFlow(RoutineCatalogOverlayState())
@@ -63,27 +70,22 @@ class RoutineCatalogViewModel(
 
     fun toggleStar(routineId: Long) {
         viewModelScope.launch {
-            val routine = repository.getRoutine(routineId) ?: return@launch
-            repository.setRoutineStarred(routineId, !routine.starred)
+            val routine = store.getRoutine(routineId) ?: return@launch
+            store.setRoutineStarred(routineId, !routine.starred)
         }
     }
 
     fun requestDeleteRoutine(routineId: Long) {
         viewModelScope.launch {
-            if (repository.isRoutineInActiveWorkout(routineId)) {
-                _overlayState.update {
-                    it.copy(deleteBlockedMessage = "Finish or discard the active workout before deleting this routine.")
-                }
-                return@launch
-            }
-            val routine = repository.getRoutine(routineId) ?: return@launch
-            _overlayState.update {
-                it.copy(
-                    confirmDeleteRoutineId = routineId,
-                    confirmDeleteRoutineName = routine.name.trim().ifEmpty { "Routine" },
-                    deleteBlockedMessage = null,
-                )
-            }
+            val routine = store.getRoutine(routineId)
+            applyDeleteDecision(
+                RoutineDeleteLogic.request(
+                    routineId = routineId,
+                    routineName = routine?.name,
+                    inActiveWorkout = store.isRoutineInActiveWorkout(routineId),
+                    routineMissing = routine == null,
+                ),
+            )
         }
     }
 
@@ -98,29 +100,58 @@ class RoutineCatalogViewModel(
 
     fun confirmDeleteRoutine() {
         viewModelScope.launch {
-            val routineId = _overlayState.value.confirmDeleteRoutineId ?: return@launch
-            if (repository.isRoutineInActiveWorkout(routineId)) {
-                _overlayState.update {
-                    it.copy(
-                        confirmDeleteRoutineId = null,
-                        confirmDeleteRoutineName = null,
-                        deleteBlockedMessage = "Finish or discard the active workout before deleting this routine.",
-                    )
-                }
-                return@launch
-            }
-            repository.deleteRoutine(routineId)
-            _overlayState.update {
-                it.copy(
-                    confirmDeleteRoutineId = null,
-                    confirmDeleteRoutineName = null,
+            val routineId = _overlayState.value.confirmDeleteRoutineId
+            when (
+                val decision = RoutineDeleteLogic.confirm(
+                    routineId = routineId,
+                    inActiveWorkout = routineId != null && store.isRoutineInActiveWorkout(routineId),
                 )
+            ) {
+                is RoutineDeleteDecision.Confirm -> {
+                    store.deleteRoutine(decision.routineId)
+                    _overlayState.update {
+                        it.copy(
+                            confirmDeleteRoutineId = null,
+                            confirmDeleteRoutineName = null,
+                        )
+                    }
+                }
+                RoutineDeleteDecision.Blocked -> {
+                    _overlayState.update {
+                        it.copy(
+                            confirmDeleteRoutineId = null,
+                            confirmDeleteRoutineName = null,
+                            deleteBlockedMessage = RoutineDeleteLogic.BLOCKED_MESSAGE,
+                        )
+                    }
+                }
+                RoutineDeleteDecision.Ignore -> Unit
             }
         }
     }
 
     fun clearDeleteBlockedMessage() {
         _overlayState.update { it.copy(deleteBlockedMessage = null) }
+    }
+
+    private fun applyDeleteDecision(decision: RoutineDeleteDecision) {
+        when (decision) {
+            is RoutineDeleteDecision.Confirm -> {
+                _overlayState.update {
+                    it.copy(
+                        confirmDeleteRoutineId = decision.routineId,
+                        confirmDeleteRoutineName = decision.name,
+                        deleteBlockedMessage = null,
+                    )
+                }
+            }
+            RoutineDeleteDecision.Blocked -> {
+                _overlayState.update {
+                    it.copy(deleteBlockedMessage = RoutineDeleteLogic.BLOCKED_MESSAGE)
+                }
+            }
+            RoutineDeleteDecision.Ignore -> Unit
+        }
     }
 }
 
@@ -148,13 +179,27 @@ private fun GymRoutine.toCatalogItem() = RoutineCatalogItem(
     roundsCompleted = roundsCompleted,
 )
 
+private class GymWorkoutRoutineCatalogStore(
+    private val repository: GymWorkoutRepository,
+) : RoutineCatalogStore {
+    override fun observeRoutines(): Flow<List<GymRoutine>> = repository.observeRoutines()
+    override suspend fun getRoutine(routineId: Long): GymRoutine? = repository.getRoutine(routineId)
+    override suspend fun setRoutineStarred(routineId: Long, starred: Boolean) =
+        repository.setRoutineStarred(routineId, starred)
+    override suspend fun isRoutineInActiveWorkout(routineId: Long): Boolean =
+        repository.isRoutineInActiveWorkout(routineId)
+    override suspend fun deleteRoutine(routineId: Long) = repository.deleteRoutine(routineId)
+}
+
 class RoutineCatalogViewModelFactory(
     private val application: FlowApplication,
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(RoutineCatalogViewModel::class.java)) {
-            return RoutineCatalogViewModel(application) as T
+            return RoutineCatalogViewModel(
+                GymWorkoutRoutineCatalogStore(application.gymWorkoutRepository),
+            ) as T
         }
         throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
     }

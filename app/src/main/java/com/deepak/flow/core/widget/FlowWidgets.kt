@@ -18,6 +18,7 @@ import com.deepak.flow.core.model.DailyProgress
 import com.deepak.flow.core.model.UserProfile
 import com.deepak.flow.core.model.formatDailyProgressPercent
 import com.deepak.flow.core.model.formatWaterLiters
+import com.deepak.flow.core.model.activeOn
 import com.deepak.flow.core.model.remindersFeatureEnabled
 import com.deepak.flow.core.model.todayWaterIntakeMl
 import com.deepak.flow.core.model.withWaterAdd
@@ -253,7 +254,7 @@ object FlowWidgets {
         }
         val zoneId = ZoneId.systemDefault()
         val today = LocalDate.now(zoneId)
-        val reminders = app.reminderRepository.observeReminders().first()
+        val reminders = app.reminderRepository.observeReminders().first().activeOn(today)
         val completed = app.reminderRepository.observeTodayCompletions(today.toEpochDay()).first()
         return buildTodayWidgetSnapshot(
             reminders = reminders,
